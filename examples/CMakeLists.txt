@@ -1,10 +1,4 @@
-foreach(example basic_usage http_server_example)
-    add_executable(${example} ${example}.cpp)
-    target_link_libraries(${example}
-        PRIVATE
-            prometheus::client
-            $<$<TARGET_EXISTS:httplib::httplib>:httplib::httplib>
-    )
-    target_compile_features(${example} PRIVATE cxx_std_23)
-    prometheus_set_warnings(${example})
-endforeach()
+add_executable(basic_usage basic_usage.cpp)
+target_link_libraries(basic_usage PRIVATE prometheus::client)
+target_compile_features(basic_usage PRIVATE cxx_std_23)
+prometheus_set_warnings(basic_usage)
