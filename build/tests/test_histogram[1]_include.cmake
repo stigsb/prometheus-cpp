@@ -1,0 +1,5 @@
+if(EXISTS "/home/openclaw/.openclaw/workspace/prometheus-client-cpp/build/tests/test_histogram[1]_tests.cmake")
+  include("/home/openclaw/.openclaw/workspace/prometheus-client-cpp/build/tests/test_histogram[1]_tests.cmake")
+else()
+  add_test(test_histogram_NOT_BUILT test_histogram_NOT_BUILT)
+endif()

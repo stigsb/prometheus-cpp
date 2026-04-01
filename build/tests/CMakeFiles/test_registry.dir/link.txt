@@ -1,0 +1,1 @@
+/usr/bin/c++ -g CMakeFiles/test_registry.dir/test_registry.cpp.o -o test_registry  ../lib/libgtest_main.a ../lib/libgmock.a ../lib/libgtest.a 

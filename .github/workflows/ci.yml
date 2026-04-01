@@ -1,0 +1,80 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: GCC 13
+            os: ubuntu-24.04
+            cc: gcc-13
+            cxx: g++-13
+          - name: GCC 14
+            os: ubuntu-24.04
+            cc: gcc-14
+            cxx: g++-14
+          - name: Clang 18
+            os: ubuntu-24.04
+            cc: clang-18
+            cxx: clang++-18
+
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        env:
+          CC: ${{ matrix.cc }}
+          CXX: ${{ matrix.cxx }}
+        run: |
+          cmake -B build \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DPROMETHEUS_BUILD_TESTS=ON \
+            -DPROMETHEUS_BUILD_EXAMPLES=ON
+
+      - name: Build
+        run: cmake --build build -j$(nproc)
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure -j$(nproc)
+
+  sanitizers:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: ASan + UBSan
+            flag: PROMETHEUS_ENABLE_ASAN
+          - name: TSan
+            flag: PROMETHEUS_ENABLE_TSAN
+
+    name: ${{ matrix.name }}
+    runs-on: ubuntu-24.04
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        env:
+          CC: clang-18
+          CXX: clang++-18
+        run: |
+          cmake -B build \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DPROMETHEUS_BUILD_TESTS=ON \
+            -D${{ matrix.flag }}=ON
+
+      - name: Build
+        run: cmake --build build -j$(nproc)
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure -j$(nproc)

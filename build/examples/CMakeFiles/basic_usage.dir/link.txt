@@ -1,0 +1,1 @@
+/usr/bin/c++ -g CMakeFiles/basic_usage.dir/basic_usage.cpp.o -o basic_usage 
