@@ -1,5 +1,0 @@
-if(EXISTS "/home/openclaw/.openclaw/workspace/prometheus-client-cpp/build/tests/test_metric_family[1]_tests.cmake")
-  include("/home/openclaw/.openclaw/workspace/prometheus-client-cpp/build/tests/test_metric_family[1]_tests.cmake")
-else()
-  add_test(test_metric_family_NOT_BUILT test_metric_family_NOT_BUILT)
-endif()

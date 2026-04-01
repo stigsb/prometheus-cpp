@@ -1,5 +1,0 @@
-if(EXISTS "/home/openclaw/.openclaw/workspace/prometheus-client-cpp/build/tests/test_concurrency[1]_tests.cmake")
-  include("/home/openclaw/.openclaw/workspace/prometheus-client-cpp/build/tests/test_concurrency[1]_tests.cmake")
-else()
-  add_test(test_concurrency_NOT_BUILT test_concurrency_NOT_BUILT)
-endif()

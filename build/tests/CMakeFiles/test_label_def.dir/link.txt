@@ -1,1 +1,0 @@
-/usr/bin/c++ -g CMakeFiles/test_label_def.dir/test_label_def.cpp.o -o test_label_def  ../lib/libgtest_main.a ../lib/libgmock.a ../lib/libgtest.a 

@@ -1,5 +1,0 @@
-if(EXISTS "/home/openclaw/.openclaw/workspace/prometheus-client-cpp/build/tests/test_registry[1]_tests.cmake")
-  include("/home/openclaw/.openclaw/workspace/prometheus-client-cpp/build/tests/test_registry[1]_tests.cmake")
-else()
-  add_test(test_registry_NOT_BUILT test_registry_NOT_BUILT)
-endif()

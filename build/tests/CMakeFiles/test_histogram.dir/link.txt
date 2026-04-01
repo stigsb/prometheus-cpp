@@ -1,1 +1,0 @@
-/usr/bin/c++ -g CMakeFiles/test_histogram.dir/test_histogram.cpp.o -o test_histogram  ../lib/libgtest_main.a ../lib/libgmock.a ../lib/libgtest.a 

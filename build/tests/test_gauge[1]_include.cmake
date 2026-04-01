@@ -1,5 +1,0 @@
-if(EXISTS "/home/openclaw/.openclaw/workspace/prometheus-client-cpp/build/tests/test_gauge[1]_tests.cmake")
-  include("/home/openclaw/.openclaw/workspace/prometheus-client-cpp/build/tests/test_gauge[1]_tests.cmake")
-else()
-  add_test(test_gauge_NOT_BUILT test_gauge_NOT_BUILT)
-endif()
