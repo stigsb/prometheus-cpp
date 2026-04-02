@@ -1,4 +1,4 @@
-# Architecture: prometheus-client-cpp
+# Architecture: prometheus-cpp
 
 A high-performance, header-only C++23 Prometheus client library optimized for metric update throughput.
 
@@ -870,7 +870,7 @@ svr.Get("/metrics", [&](const httplib::Request&, httplib::Response& res) {
 ## 11. File and Module Layout
 
 ```
-prometheus-client-cpp/
+prometheus-cpp/
 │
 ├── include/
 │   └── prometheus/
@@ -972,7 +972,7 @@ target_compile_features(prometheus-client-cpp INTERFACE cxx_std_23)
 Consumers add the library with a single line:
 
 ```cmake
-target_link_libraries(my_app PRIVATE prometheus-client-cpp)
+target_link_libraries(my_app PRIVATE prometheus::client)
 ```
 
 ### 12.2 Dependencies

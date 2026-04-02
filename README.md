@@ -1,4 +1,4 @@
-# prometheus-client-cpp
+# prometheus-cpp
 
 [![CI](https://github.com/stigsb/prometheus-cpp/actions/workflows/ci.yml/badge.svg)](https://github.com/stigsb/prometheus-cpp/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/stigsb/prometheus-cpp/graph/badge.svg)](https://codecov.io/gh/stigsb/prometheus-cpp)
@@ -216,13 +216,13 @@ ctest --test-dir build --output-on-failure
 ```cmake
 include(FetchContent)
 FetchContent_Declare(
-    prometheus-client-cpp
+    prometheus-cpp
     GIT_REPOSITORY https://github.com/stigsb/prometheus-cpp
     GIT_TAG        main
 )
-FetchContent_MakeAvailable(prometheus-client-cpp)
+FetchContent_MakeAvailable(prometheus-cpp)
 
-target_link_libraries(my_app PRIVATE prometheus-client-cpp)
+target_link_libraries(my_app PRIVATE prometheus::client)
 ```
 
 ---

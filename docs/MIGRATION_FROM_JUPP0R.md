@@ -1,6 +1,6 @@
-# Migration Guide: jupp0r/prometheus-cpp → stigsb/prometheus-client-cpp
+# Migration Guide: jupp0r/prometheus-cpp → stigsb/prometheus-cpp
 
-This guide helps you migrate from [jupp0r/prometheus-cpp](https://github.com/jupp0r/prometheus-cpp) to [stigsb/prometheus-client-cpp](https://github.com/stigsb/prometheus-cpp).
+This guide helps you migrate from [jupp0r/prometheus-cpp](https://github.com/jupp0r/prometheus-cpp) to [stigsb/prometheus-cpp](https://github.com/stigsb/prometheus-cpp).
 
 ## Why migrate?
 
@@ -13,7 +13,7 @@ This guide helps you migrate from [jupp0r/prometheus-cpp](https://github.com/jup
 
 ## Key differences at a glance
 
-| Aspect | jupp0r/prometheus-cpp | stigsb/prometheus-client-cpp |
+| Aspect | jupp0r/prometheus-cpp | stigsb/prometheus-cpp |
 |---|---|---|
 | C++ standard | C++11 | C++23 |
 | Library type | Compiled (shared/static) | Header-only |
@@ -31,7 +31,7 @@ This guide helps you migrate from [jupp0r/prometheus-cpp](https://github.com/jup
 | Summary metric | Yes | No (use Histogram) |
 | Compression | Built-in (gzip) | Not included (delegate to HTTP server) |
 | Include extension | `.h` | `.hpp` |
-| CMake target | `prometheus-cpp::pull`, `::push`, `::core` | `prometheus-client-cpp` |
+| CMake target | `prometheus-cpp::pull`, `::push`, `::core` | `prometheus::client` |
 
 ---
 
@@ -49,13 +49,13 @@ target_link_libraries(my_app PRIVATE prometheus-cpp::pull)
 ```cmake
 include(FetchContent)
 FetchContent_Declare(
-    prometheus-client-cpp
+    prometheus-cpp
     GIT_REPOSITORY https://github.com/stigsb/prometheus-cpp
     GIT_TAG        main
 )
-FetchContent_MakeAvailable(prometheus-client-cpp)
+FetchContent_MakeAvailable(prometheus-cpp)
 
-target_link_libraries(my_app PRIVATE prometheus-client-cpp)
+target_link_libraries(my_app PRIVATE prometheus::client)
 ```
 
 Also set C++23 in your project:
