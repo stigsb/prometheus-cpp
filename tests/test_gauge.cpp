@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 #include <prometheus/gauge.hpp>
 
+#include <chrono>
 #include <thread>
 #include <vector>
 
@@ -85,6 +86,17 @@ TEST(GaugeTest, ToDoubleNegative) {
     Gauge g;
     g.set(-100);
     EXPECT_DOUBLE_EQ(g.to_double(), -100.0);
+}
+
+TEST(GaugeTest, SetToCurrentTime) {
+    prometheus::Gauge g;
+    auto before = std::chrono::duration_cast<std::chrono::seconds>(
+        std::chrono::system_clock::now().time_since_epoch()).count();
+    g.set_to_current_time();
+    auto after = std::chrono::duration_cast<std::chrono::seconds>(
+        std::chrono::system_clock::now().time_since_epoch()).count();
+    EXPECT_GE(g.load(), before);
+    EXPECT_LE(g.load(), after);
 }
 
 TEST(GaugeTest, ConcurrentIncrements) {

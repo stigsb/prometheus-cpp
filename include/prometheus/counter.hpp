@@ -21,6 +21,10 @@ public:
         return static_cast<double>(load()) * scale;
     }
 
+    void reset() noexcept {
+        value_.store(0, std::memory_order_relaxed);
+    }
+
 private:
     std::atomic<int64_t> value_{0};
 };

@@ -42,7 +42,8 @@ public:
                  std::vector<std::pair<std::string,std::string>> const_labels,
                  double scale,
                  int64_t bucket_min,
-                 std::size_t bucket_count)
+                 std::size_t bucket_count,
+                 std::vector<int64_t> explicit_bounds)
         : name_(std::move(name))
         , help_(std::move(help))
         , required_mask_(required_mask)
@@ -51,6 +52,7 @@ public:
         , scale_(scale)
         , bucket_min_(bucket_min)
         , bucket_count_(bucket_count)
+        , explicit_bounds_(std::move(explicit_bounds))
     {}
 
     // Obtain (or create) the metric instance for the given label set.
@@ -67,8 +69,12 @@ public:
 
         return store_.get_or_create(key, std::move(display), [this] {
             if constexpr (std::is_same_v<MetricT, Histogram>) {
-                return std::make_unique<Histogram>(
-                    Histogram::make_bounds(bucket_min_, bucket_count_));
+                if (!explicit_bounds_.empty()) {
+                    return std::make_unique<Histogram>(Histogram::make_bounds(explicit_bounds_));
+                } else {
+                    return std::make_unique<Histogram>(
+                        Histogram::make_bounds(bucket_min_, bucket_count_));
+                }
             } else {
                 return std::make_unique<MetricT>();
             }
@@ -128,6 +134,7 @@ private:
     double scale_{1.0};
     int64_t bucket_min_{100};
     std::size_t bucket_count_{8};
+    std::vector<int64_t> explicit_bounds_;
 
     detail::MetricStore<MetricT> store_;
 };

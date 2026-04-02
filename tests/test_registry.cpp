@@ -77,3 +77,17 @@ TEST(RegistryTest, EmptySerialize) {
     // (just no crash)
     EXPECT_TRUE(out.empty() || out.find("# ") != std::string::npos);
 }
+
+#ifndef NDEBUG
+TEST(RegistryTest, DuplicateNameAborts) {
+    prometheus::Registry reg;
+    reg.counter<RegLabels>("dup_name", "first")
+        .required(RegLabels::Key::service)
+        .build();
+    EXPECT_DEATH(
+        reg.counter<RegLabels>("dup_name", "second")
+            .required(RegLabels::Key::service)
+            .build(),
+        "duplicate metric family name");
+}
+#endif

@@ -66,6 +66,14 @@ public:
         return upper_bounds_[idx];
     }
 
+    // Arbitrary bucket boundaries. Appends INT64_MAX (+Inf) if not already the last element.
+    static std::vector<int64_t> make_bounds(std::vector<int64_t> boundaries) {
+        if (boundaries.empty() || boundaries.back() != INT64_MAX) {
+            boundaries.push_back(INT64_MAX);
+        }
+        return boundaries;
+    }
+
     // Generate upper bounds: min, min*2, min*4, ..., INT64_MAX
     static std::vector<int64_t> make_bounds(int64_t min_upper_bound, std::size_t count) {
         std::vector<int64_t> bounds;

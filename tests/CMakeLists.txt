@@ -9,6 +9,7 @@ set(TEST_SOURCES
     test_registry.cpp
     test_text_serializer.cpp
     test_concurrency.cpp
+    test_check_names.cpp
 )
 
 foreach(src IN LISTS TEST_SOURCES)

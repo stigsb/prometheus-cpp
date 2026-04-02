@@ -105,6 +105,17 @@ TEST(MetricFamilyTest, HistogramFamilyWithBuckets) {
     EXPECT_EQ(h.sum(), 200);
 }
 
+TEST(MetricFamilyTest, HistogramCustomBuckets) {
+    prometheus::Registry reg;
+    auto& fam = reg.histogram<FamLabels>("latency", "Latency")
+        .required(FamLabels::Key::service)
+        .buckets(std::vector<int64_t>{100, 250, 500})
+        .build();
+    auto& h = fam.get({.service = "svc"});
+    h.observe(150);
+    EXPECT_EQ(h.num_buckets(), 4u); // 3 custom + +Inf
+}
+
 // --- Const labels appear in output ---
 
 TEST(MetricFamilyTest, ConstLabelsInOutput) {

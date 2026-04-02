@@ -117,3 +117,10 @@ TEST(TextSerializerTest, FormatDouble) {
     EXPECT_EQ(prometheus::TextSerializer::format_double(
         std::numeric_limits<double>::quiet_NaN()), "NaN");
 }
+
+TEST(TextSerializerTest, FormatDoubleLocaleIndependent) {
+    // to_chars is locale-independent by spec, verify no comma separators
+    EXPECT_EQ(prometheus::TextSerializer::format_double(1.5), "1.5");
+    EXPECT_EQ(prometheus::TextSerializer::format_double(0.001), "0.001");
+    EXPECT_EQ(prometheus::TextSerializer::format_double(100.0), "100");
+}

@@ -77,6 +77,22 @@ TEST(CounterTest, ConcurrentIncrements) {
     EXPECT_EQ(c.load(), static_cast<int64_t>(kThreads) * kIters);
 }
 
+TEST(CounterTest, Reset) {
+    prometheus::Counter c;
+    c.inc(42);
+    EXPECT_EQ(c.load(), 42);
+    c.reset();
+    EXPECT_EQ(c.load(), 0);
+}
+
+TEST(CounterTest, IncrementAfterReset) {
+    prometheus::Counter c;
+    c.inc(10);
+    c.reset();
+    c.inc(5);
+    EXPECT_EQ(c.load(), 5);
+}
+
 TEST(CounterTest, ConcurrentIncrementsByDelta) {
     Counter c;
     constexpr int kThreads = 8;

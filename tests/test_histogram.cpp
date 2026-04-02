@@ -125,6 +125,39 @@ TEST(HistogramTest, ConcurrentObserveSameBucket) {
     EXPECT_EQ(h.sum(), static_cast<int64_t>(kThreads) * kIters * 50);
 }
 
+// --- custom boundaries overload ---
+
+TEST(HistogramTest, CustomBoundaries) {
+    auto b = Histogram::make_bounds(std::vector<int64_t>{100, 250, 500, 1000});
+    ASSERT_EQ(b.size(), 5u); // 4 custom + +Inf
+    EXPECT_EQ(b[0], 100);
+    EXPECT_EQ(b[1], 250);
+    EXPECT_EQ(b[2], 500);
+    EXPECT_EQ(b[3], 1000);
+    EXPECT_EQ(b[4], INT64_MAX);
+}
+
+TEST(HistogramTest, CustomBoundariesAlreadyHasInf) {
+    auto b = Histogram::make_bounds(std::vector<int64_t>{100, 200, INT64_MAX});
+    ASSERT_EQ(b.size(), 3u); // no duplicate +Inf
+}
+
+TEST(HistogramTest, ObserveCustomBuckets) {
+    Histogram h(Histogram::make_bounds(std::vector<int64_t>{100, 250, 500, 1000}));
+    h.observe(50);   // bucket 0 (le=100)
+    h.observe(150);  // bucket 1 (le=250)
+    h.observe(300);  // bucket 2 (le=500)
+    h.observe(750);  // bucket 3 (le=1000)
+    h.observe(5000); // bucket 4 (+Inf)
+    EXPECT_EQ(h.bucket_count(0), 1);
+    EXPECT_EQ(h.bucket_count(1), 1);
+    EXPECT_EQ(h.bucket_count(2), 1);
+    EXPECT_EQ(h.bucket_count(3), 1);
+    EXPECT_EQ(h.bucket_count(4), 1);
+    EXPECT_EQ(h.total_count(), 5);
+    EXPECT_EQ(h.sum(), 50 + 150 + 300 + 750 + 5000);
+}
+
 TEST(HistogramTest, ConcurrentObserveDifferentBuckets) {
     // bounds: 100, 200, 400, +Inf
     Histogram h(Histogram::make_bounds(100, 4));

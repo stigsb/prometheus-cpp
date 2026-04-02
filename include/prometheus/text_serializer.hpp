@@ -5,8 +5,8 @@
 #include <string_view>
 #include <vector>
 #include <utility>
+#include <charconv>
 #include <cmath>
-#include <cstdio>
 
 namespace prometheus {
 
@@ -71,8 +71,8 @@ public:
         if (std::isinf(v)) return v > 0.0 ? "+Inf" : "-Inf";
         if (std::isnan(v)) return "NaN";
         char buf[64];
-        std::snprintf(buf, sizeof(buf), "%.15g", v);
-        return buf;
+        auto [ptr, ec] = std::to_chars(buf, buf + sizeof(buf), v);
+        return std::string(buf, ptr);
     }
 
 private:

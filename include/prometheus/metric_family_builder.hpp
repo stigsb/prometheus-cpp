@@ -2,6 +2,8 @@
 
 #include <prometheus/metric_family.hpp>
 #include <prometheus/label_mask.hpp>
+#include <prometheus/detail/assert.hpp>
+#include <prometheus/detail/check_names.hpp>
 
 #include <concepts>
 #include <cstddef>
@@ -25,7 +27,9 @@ public:
         : name_(std::move(name))
         , help_(std::move(help))
         , registry_(reg)
-    {}
+    {
+        PROMETHEUS_ASSERT(detail::check_metric_name(name_));
+    }
 
     auto& required(std::same_as<typename LabelTraits::Key> auto... keys) {
         if constexpr (sizeof...(keys) > 0)
@@ -40,15 +44,23 @@ public:
     }
 
     auto& const_label(std::string k, std::string v) {
+        PROMETHEUS_ASSERT(detail::check_label_name(k));
         const_labels_.emplace_back(std::move(k), std::move(v));
         return *this;
     }
 
-    auto& buckets(int64_t min, std::size_t count) 
+    auto& buckets(int64_t min, std::size_t count)
         requires std::same_as<MetricT, Histogram>
     {
         bucket_min_   = min;
         bucket_count_ = count;
+        return *this;
+    }
+
+    auto& buckets(std::vector<int64_t> boundaries)
+        requires std::same_as<MetricT, Histogram>
+    {
+        explicit_bounds_ = std::move(boundaries);
         return *this;
     }
 
@@ -72,6 +84,7 @@ private:
     double      scale_{1.0};
     int64_t     bucket_min_{100};
     std::size_t bucket_count_{8};
+    std::vector<int64_t> explicit_bounds_;
 };
 
 } // namespace prometheus

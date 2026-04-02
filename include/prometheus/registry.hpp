@@ -1,5 +1,6 @@
 #pragma once
 
+#include <prometheus/detail/assert.hpp>
 #include <prometheus/metric_family_builder.hpp>
 #include <prometheus/metric_family.hpp>
 #include <prometheus/counter.hpp>
@@ -12,6 +13,7 @@
 #include <shared_mutex>
 #include <sstream>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace prometheus {
@@ -45,6 +47,13 @@ public:
     register_family(std::unique_ptr<MetricFamily<LabelTraits, MetricT>> family) {
         auto& ref = *family;
         std::unique_lock lock(mutex_);
+        auto [it, inserted] = registered_names_.try_emplace(
+            std::string(family->name()), family->type());
+        if (!inserted) {
+            PROMETHEUS_ASSERT(it->second == family->type()
+                && "metric family registered with conflicting type");
+            PROMETHEUS_ASSERT(false && "duplicate metric family name");
+        }
         families_.push_back(std::move(family));
         return ref;
     }
@@ -68,6 +77,7 @@ public:
 private:
     mutable std::shared_mutex mutex_;
     std::vector<std::unique_ptr<Collectable>> families_;
+    std::unordered_map<std::string, MetricType> registered_names_;
 };
 
 // --- MetricFamilyBuilder::build() --- defined here so Registry is complete ---
@@ -83,7 +93,8 @@ MetricFamilyBuilder<LabelTraits, MetricT>::build() {
         std::move(const_labels_),
         scale_,
         bucket_min_,
-        bucket_count_);
+        bucket_count_,
+        std::move(explicit_bounds_));
     return registry_.register_family(std::move(family));
 }
 
