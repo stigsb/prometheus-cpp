@@ -1,0 +1,27 @@
+// labels.hpp — Application-wide label definition
+//
+// Define this ONCE per application. Every metric family in your app
+// is parameterised on this type. Add fields here as your metrics grow;
+// individual families select which labels they use via .required()/.optional().
+
+#pragma once
+
+#include <cstdint>
+#include <string>
+#include <prometheus/label_def.hpp>
+
+PROMETHEUS_DEFINE_LABELS(
+    AppLabels,
+    (service,      std::string),   // e.g. "api", "worker", "scheduler"
+    (method,       std::string),   // HTTP method: "GET", "POST", ...
+    (status_code,  uint32_t),      // HTTP status: 200, 404, 500, ...
+    (endpoint,     std::string),   // route pattern: "/v1/users/:id"
+    (queue,        std::string)    // message queue name (for async workers)
+);
+
+// Usage:
+//   auto& counter = family.get({.service = "api", .method = "POST", .status_code = 200u});
+//   counter.inc();
+//
+// Only populate the labels that the family declared as required/optional.
+// Missing required labels trigger a debug assertion.

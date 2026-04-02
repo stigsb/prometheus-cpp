@@ -1,0 +1,97 @@
+// metrics.hpp — Metric family registration
+//
+// Register all metric families at program startup. Store them as references;
+// the Registry owns the families and they are valid for its lifetime.
+
+#pragma once
+
+#include <prometheus/prometheus.hpp>
+#include "labels.hpp"
+
+// A struct that holds all metric families for the application.
+// Create one instance, passing it the registry, and store it globally
+// or inject it where needed.
+struct Metrics {
+    prometheus::Registry& registry;
+
+    // ── Counters ─────────────────────────────────────────────────────────────
+
+    // Total HTTP requests received, broken down by service/method/status.
+    // "region" is constant per process — set once via const_label.
+    prometheus::MetricFamily<AppLabels, prometheus::Counter>& http_requests_total;
+
+    // Total bytes sent in HTTP responses.
+    prometheus::MetricFamily<AppLabels, prometheus::Counter>& http_response_bytes_total;
+
+    // ── Histograms ───────────────────────────────────────────────────────────
+
+    // HTTP request latency. Stored in microseconds, exposed as seconds.
+    // 14 power-of-two buckets: 100µs, 200µs, 400µs, ... up to ~819ms, then +Inf.
+    prometheus::MetricFamily<AppLabels, prometheus::Histogram>& http_request_duration_seconds;
+
+    // HTTP response body size. Custom byte boundaries matching typical response sizes.
+    prometheus::MetricFamily<AppLabels, prometheus::Histogram>& http_response_size_bytes;
+
+    // ── Gauges ───────────────────────────────────────────────────────────────
+
+    // Currently open connections.
+    prometheus::MetricFamily<AppLabels, prometheus::Gauge>& active_connections;
+
+    // Items currently queued for processing (for async workers).
+    prometheus::MetricFamily<AppLabels, prometheus::Gauge>& queue_depth;
+
+    // ── Constructor: register everything ─────────────────────────────────────
+
+    explicit Metrics(prometheus::Registry& reg, const std::string& region)
+        : registry(reg)
+
+        , http_requests_total(
+            reg.counter<AppLabels>("http_requests_total", "Total HTTP requests received")
+                .required(AppLabels::Key::service,
+                          AppLabels::Key::method,
+                          AppLabels::Key::status_code)
+                .optional(AppLabels::Key::endpoint)
+                .const_label("region", region)
+                .build())
+
+        , http_response_bytes_total(
+            reg.counter<AppLabels>("http_response_bytes_total", "Total bytes sent in responses")
+                .required(AppLabels::Key::service,
+                          AppLabels::Key::method)
+                .const_label("region", region)
+                .build())
+
+        , http_request_duration_seconds(
+            reg.histogram<AppLabels>("http_request_duration_seconds", "HTTP request latency")
+                .required(AppLabels::Key::service,
+                          AppLabels::Key::method)
+                .optional(AppLabels::Key::endpoint)
+                .buckets(/*min_upper_bound=*/100, /*count=*/14)  // 100µs .. ~819ms, +Inf
+                .unit(prometheus::units::microseconds)           // int64 µs → double seconds
+                .const_label("region", region)
+                .build())
+
+        , http_response_size_bytes(
+            reg.histogram<AppLabels>("http_response_size_bytes", "HTTP response body size")
+                .required(AppLabels::Key::service,
+                          AppLabels::Key::method)
+                .buckets(std::vector<int64_t>{
+                    128, 256, 512, 1024, 4096, 16384, 65536, 262144, 1048576})
+                .unit(prometheus::units::bytes)
+                .const_label("region", region)
+                .build())
+
+        , active_connections(
+            reg.gauge<AppLabels>("active_connections", "Currently open connections")
+                .required(AppLabels::Key::service)
+                .const_label("region", region)
+                .build())
+
+        , queue_depth(
+            reg.gauge<AppLabels>("queue_depth", "Items waiting in processing queue")
+                .required(AppLabels::Key::service,
+                          AppLabels::Key::queue)
+                .const_label("region", region)
+                .build())
+    {}
+};

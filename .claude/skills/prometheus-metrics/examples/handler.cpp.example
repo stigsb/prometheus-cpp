@@ -1,0 +1,87 @@
+// handler.cpp — Wiring up the /metrics HTTP endpoint
+//
+// This example uses cpp-httplib (https://github.com/yhirose/cpp-httplib),
+// but registry.serialize() returns a std::string, so it works with any
+// HTTP framework.
+
+#include <chrono>
+#include <httplib.h>                      // cpp-httplib
+#include <prometheus/prometheus.hpp>
+#include "labels.hpp"
+#include "metrics.hpp"
+
+int main() {
+    // ── Set up registry and metrics ──────────────────────────────────────────
+
+    prometheus::Registry registry;
+    Metrics metrics(registry, "us-east-1");
+
+    // ── Cache metric handles at startup ──────────────────────────────────────
+    // get() does a hash-map lookup — do this once, not on every request.
+
+    auto& api_get_200  = metrics.http_requests_total.get(
+        {.service = "api", .method = "GET", .status_code = 200u});
+    auto& api_get_404  = metrics.http_requests_total.get(
+        {.service = "api", .method = "GET", .status_code = 404u});
+    auto& api_post_200 = metrics.http_requests_total.get(
+        {.service = "api", .method = "POST", .status_code = 200u});
+    auto& api_post_500 = metrics.http_requests_total.get(
+        {.service = "api", .method = "POST", .status_code = 500u});
+
+    auto& api_get_latency  = metrics.http_request_duration_seconds.get(
+        {.service = "api", .method = "GET"});
+    auto& api_post_latency = metrics.http_request_duration_seconds.get(
+        {.service = "api", .method = "POST"});
+
+    auto& api_conns = metrics.active_connections.get({.service = "api"});
+
+    // ── HTTP server ──────────────────────────────────────────────────────────
+
+    httplib::Server svr;
+
+    // Expose Prometheus metrics endpoint
+    svr.Get("/metrics", [&](const httplib::Request&, httplib::Response& res) {
+        res.set_content(registry.serialize(),
+                        "text/plain; version=0.0.4; charset=utf-8");
+    });
+
+    // Example request handler showing metric usage on the hot path
+    svr.Get("/api/users/:id", [&](const httplib::Request& req, httplib::Response& res) {
+        api_conns.inc();
+
+        auto start = std::chrono::steady_clock::now();
+
+        // ... handle request ...
+        bool found = true;  // placeholder
+        if (found) {
+            res.set_content(R"({"id": 1, "name": "Alice"})", "application/json");
+            api_get_200.inc();  // single atomic op
+        } else {
+            res.status = 404;
+            api_get_404.inc();
+        }
+
+        auto elapsed_us = std::chrono::duration_cast<std::chrono::microseconds>(
+            std::chrono::steady_clock::now() - start).count();
+        api_get_latency.observe(elapsed_us);  // single atomic op (binary search + fetch_add)
+
+        api_conns.dec();
+    });
+
+    svr.listen("0.0.0.0", 8080);
+    return 0;
+}
+
+// ── Alternative: raw HTTP handler (no framework) ─────────────────────────────
+//
+// If you're not using cpp-httplib, just call registry.serialize() wherever
+// your HTTP framework expects a response body:
+//
+//   std::string body = registry.serialize();
+//   // Write body with content-type "text/plain; version=0.0.4; charset=utf-8"
+//
+// For streaming to avoid the intermediate string:
+//
+//   std::ostringstream oss;
+//   registry.serialize(oss);
+//   // Send oss.str() or use oss directly if your framework supports it
