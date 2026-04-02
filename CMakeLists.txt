@@ -10,7 +10,8 @@ project(
 # ── Options ───────────────────────────────────────────────────────────────────
 option(PROMETHEUS_BUILD_TESTS       "Build unit tests"   ${PROJECT_IS_TOP_LEVEL})
 option(PROMETHEUS_BUILD_EXAMPLES   "Build examples"     ${PROJECT_IS_TOP_LEVEL})
-option(PROMETHEUS_BUILD_BENCHMARKS "Build benchmarks"   OFF)
+option(PROMETHEUS_BUILD_BENCHMARKS         "Build benchmarks"                        OFF)
+option(PROMETHEUS_BUILD_COMPARISON_BENCH   "Build jupp0r vs stigsb comparison bench" OFF)
 option(PROMETHEUS_ENABLE_ASAN    "Enable AddressSanitizer (Debug only)" OFF)
 option(PROMETHEUS_ENABLE_TSAN    "Enable ThreadSanitizer (Debug only)"  OFF)
 

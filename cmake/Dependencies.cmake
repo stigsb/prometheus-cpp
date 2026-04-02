@@ -25,7 +25,10 @@ if(PROMETHEUS_BUILD_BENCHMARKS)
   set(BENCHMARK_ENABLE_GTEST_TESTS OFF CACHE BOOL "" FORCE)
   FetchContent_MakeAvailable(googlebenchmark)
 
-  # jupp0r/prometheus-cpp for comparison benchmarks
+endif()
+
+# ── jupp0r/prometheus-cpp (comparison benchmarks only) ───────────────────────
+if(PROMETHEUS_BUILD_COMPARISON_BENCH)
   FetchContent_Declare(
     jupp0r_prometheus
     GIT_REPOSITORY https://github.com/jupp0r/prometheus-cpp.git
