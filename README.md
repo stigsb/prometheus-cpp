@@ -246,6 +246,8 @@ cmake --build build
 
 ## Design
 
+See [docs/MIGRATION_FROM_JUPP0R.md](docs/MIGRATION_FROM_JUPP0R.md) if you're migrating from [jupp0r/prometheus-cpp](https://github.com/jupp0r/prometheus-cpp).
+
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full design document covering:
 
 - Label system and LabelMask design
