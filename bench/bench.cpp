@@ -153,7 +153,7 @@ BENCHMARK(BM_HistogramObserve_LargeBuckets);
 // Histogram observe multi-threaded (small buckets)
 static void BM_HistogramObserve_SmallBuckets_MT(benchmark::State& state) {
     static prometheus::Registry* reg = nullptr;
-    static prometheus::Histogram* hist = nullptr;
+    static prometheus::DynamicHistogram* hist = nullptr;
 
     if (state.thread_index() == 0) {
         reg = new prometheus::Registry();
@@ -181,7 +181,7 @@ BENCHMARK(BM_HistogramObserve_SmallBuckets_MT)->ThreadRange(1, 16)->UseRealTime(
 // Histogram observe multi-threaded (large buckets)
 static void BM_HistogramObserve_LargeBuckets_MT(benchmark::State& state) {
     static prometheus::Registry* reg = nullptr;
-    static prometheus::Histogram* hist = nullptr;
+    static prometheus::DynamicHistogram* hist = nullptr;
 
     if (state.thread_index() == 0) {
         reg = new prometheus::Registry();

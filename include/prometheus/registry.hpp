@@ -8,6 +8,7 @@
 #include <prometheus/histogram.hpp>
 #include <prometheus/text_serializer.hpp>
 
+#include <cstddef>
 #include <memory>
 #include <mutex>
 #include <shared_mutex>
@@ -34,8 +35,16 @@ public:
         return {std::move(name), std::move(help), *this};
     }
 
+    // Dynamic histogram (backward compat) — called as registry.histogram<AppLabels>(...)
     template <typename LabelTraits>
-    MetricFamilyBuilder<LabelTraits, Histogram>
+    MetricFamilyBuilder<LabelTraits, DynamicHistogram>
+    histogram(std::string name, std::string help) {
+        return {std::move(name), std::move(help), *this};
+    }
+
+    // Static histogram — called as registry.histogram<AppLabels, 8>(...)
+    template <typename LabelTraits, std::size_t N>
+    MetricFamilyBuilder<LabelTraits, Histogram<N>>
     histogram(std::string name, std::string help) {
         return {std::move(name), std::move(help), *this};
     }
@@ -92,9 +101,7 @@ MetricFamilyBuilder<LabelTraits, MetricT>::build() {
         optional_mask_,
         std::move(const_labels_),
         scale_,
-        bucket_min_,
-        bucket_count_,
-        std::move(explicit_bounds_));
+        std::move(factory_));
     return registry_.register_family(std::move(family));
 }
 

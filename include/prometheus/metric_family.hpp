@@ -11,6 +11,7 @@
 #include <climits>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -41,18 +42,14 @@ public:
                  uint64_t optional_mask,
                  std::vector<std::pair<std::string,std::string>> const_labels,
                  double scale,
-                 int64_t bucket_min,
-                 std::size_t bucket_count,
-                 std::vector<int64_t> explicit_bounds)
+                 std::function<std::unique_ptr<MetricT>()> factory)
         : name_(std::move(name))
         , help_(std::move(help))
         , required_mask_(required_mask)
         , optional_mask_(optional_mask)
         , const_labels_(std::move(const_labels))
         , scale_(scale)
-        , bucket_min_(bucket_min)
-        , bucket_count_(bucket_count)
-        , explicit_bounds_(std::move(explicit_bounds))
+        , factory_(std::move(factory))
     {}
 
     // Obtain (or create) the metric instance for the given label set.
@@ -67,18 +64,7 @@ public:
         auto key     = detail::make_label_key<LabelTraits>(ls, allowed);
         auto display = detail::make_label_display<LabelTraits>(ls, allowed);
 
-        return store_.get_or_create(key, std::move(display), [this] {
-            if constexpr (std::is_same_v<MetricT, Histogram>) {
-                if (!explicit_bounds_.empty()) {
-                    return std::make_unique<Histogram>(Histogram::make_bounds(explicit_bounds_));
-                } else {
-                    return std::make_unique<Histogram>(
-                        Histogram::make_bounds(bucket_min_, bucket_count_));
-                }
-            } else {
-                return std::make_unique<MetricT>();
-            }
-        });
+        return store_.get_or_create(key, std::move(display), factory_);
     }
 
     // --- Collectable interface ---
@@ -87,17 +73,21 @@ public:
     std::string_view help() const noexcept override { return help_; }
 
     MetricType type() const noexcept override {
-        if constexpr (std::is_same_v<MetricT, Counter>)   return MetricType::Counter;
+        if constexpr (std::is_same_v<MetricT, Counter>)    return MetricType::Counter;
         else if constexpr (std::is_same_v<MetricT, Gauge>) return MetricType::Gauge;
-        else                                               return MetricType::Histogram;
+        else if constexpr (HistogramLike<MetricT>)         return MetricType::Histogram;
+        else {
+            static_assert(sizeof(MetricT) == 0, "Unknown metric type");
+            return MetricType::Counter; // unreachable
+        }
     }
 
     void collect(TextSerializer& ser) const override {
         ser.write_header(name_, help_, type());
 
-        if constexpr (std::is_same_v<MetricT, Histogram>) {
-            store_.for_each([&](const std::string& dyn, const Histogram& h) {
-                const std::size_t n = h.num_buckets();
+        if constexpr (HistogramLike<MetricT>) {
+            store_.for_each([&](const std::string& dyn, const MetricT& h) {
+                const std::size_t n = h.num_buckets_runtime();
                 int64_t cum = 0;
                 for (std::size_t i = 0; i < n; ++i) {
                     cum += h.bucket_count(i);
@@ -132,9 +122,7 @@ private:
     uint64_t optional_mask_{};
     std::vector<std::pair<std::string,std::string>> const_labels_;
     double scale_{1.0};
-    int64_t bucket_min_{100};
-    std::size_t bucket_count_{8};
-    std::vector<int64_t> explicit_bounds_;
+    std::function<std::unique_ptr<MetricT>()> factory_;
 
     detail::MetricStore<MetricT> store_;
 };

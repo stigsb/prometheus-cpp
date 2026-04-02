@@ -21,10 +21,18 @@ int main() {
         .const_label("env", "production")
         .build();
 
-    auto& latency = registry.histogram<AppLabels>(
-            "http_request_duration_us", "Request latency in microseconds")
+    // Dynamic histogram (backward compat): runtime bucket count, heap-allocated
+    auto& latency_dyn = registry.histogram<AppLabels>(
+            "http_request_duration_us", "Request latency in microseconds (dynamic)")
         .required(AppLabels::Key::service, AppLabels::Key::method)
         .buckets(/*min=*/100, /*count=*/10)  // 100, 200, 400, 800 ... µs
+        .build();
+
+    // Static histogram (recommended): compile-time bucket count, zero heap allocation
+    auto& latency_static = registry.histogram<AppLabels, 8>(
+            "http_request_duration2_us", "Request latency in microseconds (static)")
+        .required(AppLabels::Key::service, AppLabels::Key::method)
+        .bounds(prometheus::make_bounds<8>(100))  // 100, 200, 400, 800 ... µs
         .build();
 
     auto& active = registry.gauge<AppLabels>(
@@ -37,10 +45,15 @@ int main() {
     requests.get({.service = "api", .method = "POST", .status_code = 201u}).inc(342);
     requests.get({.service = "api", .method = "GET",  .status_code = 404u}).inc(12);
 
-    latency.get({.service = "api", .method = "GET"}).observe(150);
-    latency.get({.service = "api", .method = "GET"}).observe(250);
-    latency.get({.service = "api", .method = "GET"}).observe(1200);
-    latency.get({.service = "api", .method = "POST"}).observe(800);
+    latency_dyn.get({.service = "api", .method = "GET"}).observe(150);
+    latency_dyn.get({.service = "api", .method = "GET"}).observe(250);
+    latency_dyn.get({.service = "api", .method = "GET"}).observe(1200);
+    latency_dyn.get({.service = "api", .method = "POST"}).observe(800);
+
+    latency_static.get({.service = "api", .method = "GET"}).observe(150);
+    latency_static.get({.service = "api", .method = "GET"}).observe(250);
+    latency_static.get({.service = "api", .method = "GET"}).observe(1200);
+    latency_static.get({.service = "api", .method = "POST"}).observe(800);
 
     active.get({.service = "api"}).set(42);
 

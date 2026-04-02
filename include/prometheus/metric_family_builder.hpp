@@ -8,6 +8,7 @@
 #include <concepts>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <string>
 #include <type_traits>
@@ -19,7 +20,7 @@ namespace prometheus {
 class Registry; // defined in registry.hpp
 
 // Fluent builder returned by Registry::counter<LT>(), ::gauge<LT>(), ::histogram<LT>().
-// Call .required()/.optional()/.const_label()/.buckets()/.scale() then .build().
+// Call .required()/.optional()/.const_label()/.buckets()/.bounds()/.scale() then .build().
 template <typename LabelTraits, typename MetricT>
 class MetricFamilyBuilder {
 public:
@@ -29,6 +30,18 @@ public:
         , registry_(reg)
     {
         PROMETHEUS_ASSERT(detail::check_metric_name(name_));
+        // Set up default factory based on type
+        if constexpr (!HistogramLike<MetricT>) {
+            // Counter, Gauge, etc.
+            factory_ = []{ return std::make_unique<MetricT>(); };
+        } else if constexpr (std::is_same_v<MetricT, DynamicHistogram>) {
+            // Default: 8 power-of-two buckets starting at 100
+            factory_ = []{
+                return std::make_unique<DynamicHistogram>(
+                    DynamicHistogram::make_bounds(100, 8));
+            };
+        }
+        // For Histogram<N>: factory_ is empty until bounds() is called
     }
 
     auto& required(std::same_as<typename LabelTraits::Key> auto... keys) {
@@ -49,18 +62,34 @@ public:
         return *this;
     }
 
+    // DynamicHistogram: power-of-two buckets from min
     auto& buckets(int64_t min, std::size_t count)
-        requires std::same_as<MetricT, Histogram>
+        requires std::same_as<MetricT, DynamicHistogram>
     {
-        bucket_min_   = min;
-        bucket_count_ = count;
+        factory_ = [min, count]{
+            return std::make_unique<DynamicHistogram>(
+                DynamicHistogram::make_bounds(min, count));
+        };
         return *this;
     }
 
+    // DynamicHistogram: explicit boundaries
     auto& buckets(std::vector<int64_t> boundaries)
-        requires std::same_as<MetricT, Histogram>
+        requires std::same_as<MetricT, DynamicHistogram>
     {
-        explicit_bounds_ = std::move(boundaries);
+        auto b = DynamicHistogram::make_bounds(std::move(boundaries));
+        factory_ = [b = std::move(b)]{
+            return std::make_unique<DynamicHistogram>(b);
+        };
+        return *this;
+    }
+
+    // Histogram<N>: compile-time-sized bounds array
+    template <std::size_t BucketCount>
+    auto& bounds(std::array<int64_t, BucketCount> b)
+        requires HistogramLike<MetricT> && (!std::is_same_v<MetricT, DynamicHistogram>)
+    {
+        factory_ = [b]{ return std::make_unique<MetricT>(b); };
         return *this;
     }
 
@@ -82,9 +111,7 @@ private:
     uint64_t    optional_mask_{};
     std::vector<std::pair<std::string,std::string>> const_labels_;
     double      scale_{1.0};
-    int64_t     bucket_min_{100};
-    std::size_t bucket_count_{8};
-    std::vector<int64_t> explicit_bounds_;
+    std::function<std::unique_ptr<MetricT>()> factory_;
 };
 
 } // namespace prometheus
