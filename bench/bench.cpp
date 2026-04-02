@@ -318,15 +318,21 @@ static void BM_LocalHistogramBatchObserve_MT(benchmark::State& state) {
         hist = new prometheus::Histogram(prometheus::Histogram::make_bounds(100, 4));
     }
 
-    prometheus::LocalHistogram local(*hist);
+    // NOTE: LocalHistogram must be constructed inside the loop (lazily) because
+    // Google Benchmark only synchronizes threads at the start of the for-loop.
+    // Constructing it before the loop races with thread 0's setup of `hist`.
+    prometheus::LocalHistogram* local = nullptr;
     constexpr int kBatch = 1000;
 
     for (auto _ : state) {
+        if (!local) local = new prometheus::LocalHistogram(*hist);
         for (int i = 0; i < kBatch; ++i)
-            local.observe(i % 500);
-        local.merge_into(*hist);
+            local->observe(i % 500);
+        local->merge_into(*hist);
     }
     state.SetItemsProcessed(state.iterations() * kBatch);
+
+    delete local;
 
     if (state.thread_index() == 0) {
         delete hist;
