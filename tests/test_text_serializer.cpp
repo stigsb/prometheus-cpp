@@ -222,7 +222,11 @@ TEST(TextSerializerTest, GaugeLargeValue) {
         .build();
     fam.get({.service = "api"}).set(1'000'000'000'000LL);
     auto out = reg.serialize();
-    EXPECT_NE(out.find("1000000000000"), std::string::npos);
+    // to_chars may produce "1000000000000" or "1e+12" or "1e12"
+    bool found = out.find("1000000000000") != std::string::npos
+              || out.find("1e+12") != std::string::npos
+              || out.find("1e12") != std::string::npos;
+    EXPECT_TRUE(found) << "Output: " << out;
 }
 
 TEST(TextSerializerTest, HelpTextEscaping) {
