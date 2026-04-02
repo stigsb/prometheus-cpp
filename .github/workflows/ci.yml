@@ -115,9 +115,9 @@ jobs:
         run: |
           sudo apt-get install -y lcov
           lcov --capture --directory build --output-file coverage.info \
-            --gcov-tool gcov-14 --ignore-errors mismatch
+            --gcov-tool gcov-14 --ignore-errors mismatch,negative
           lcov --remove coverage.info '/usr/*' '*/build/_deps/*' '*/tests/*' \
-            --output-file coverage.info --ignore-errors unused
+            --output-file coverage.info --ignore-errors unused,negative
           lcov --list coverage.info
 
       - name: Upload to Codecov
