@@ -61,11 +61,10 @@ public:
         PROMETHEUS_ASSERT((populated & required_mask_) == required_mask_);
         PROMETHEUS_ASSERT((populated & ~allowed) == 0u);
 
-        auto hash = detail::make_label_hash<LabelTraits>(ls, allowed);
+        const auto hash = detail::make_label_hash<LabelTraits>(ls, allowed);
 
         return store_.get_or_create(
             hash,
-            [&]{ return detail::make_label_key<LabelTraits>(ls, allowed); },
             [&]{ return detail::make_label_display<LabelTraits>(ls, allowed); },
             factory_
         );
