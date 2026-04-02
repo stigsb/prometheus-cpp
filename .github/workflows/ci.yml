@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: write
+  deployments: write
+
 jobs:
   build:
     strategy:
@@ -134,10 +138,12 @@ jobs:
         include:
           - name: Bench (x64)
             os: ubuntu-24.04
+            arch: x64
             cc: gcc-14
             cxx: g++-14
           - name: Bench (arm64)
             os: ubuntu-24.04-arm
+            arch: arm64
             cc: gcc-14
             cxx: g++-14
 
@@ -161,23 +167,44 @@ jobs:
 
       - name: Run benchmarks
         run: |
-          echo "## $(uname -m) — $(nproc) cores"
-          echo ""
-          ./build/bench/prometheus_bench \
-            --benchmark_repetitions=3 \
-            --benchmark_report_aggregates_only=true \
-            --benchmark_format=console 2>&1 | grep '_mean'
-
-      - name: Run benchmarks (JSON)
-        run: |
           ./build/bench/prometheus_bench \
             --benchmark_repetitions=3 \
             --benchmark_report_aggregates_only=true \
             --benchmark_out=bench_results.json \
             --benchmark_out_format=json
 
-      - name: Upload benchmark results
+      - name: Store benchmark results
+        if: github.ref == 'refs/heads/main'
+        uses: benchmark-action/github-action-benchmark@v1
+        with:
+          name: "Benchmarks (${{ matrix.arch }})"
+          tool: googlecpp
+          output-file-path: bench_results.json
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          auto-push: true
+          gh-pages-branch: gh-pages
+          benchmark-data-dir-path: dev/bench/${{ matrix.arch }}
+          alert-threshold: "115%"
+          comment-on-alert: true
+          fail-on-alert: false
+
+      - name: Compare benchmarks (PR)
+        if: github.event_name == 'pull_request'
+        uses: benchmark-action/github-action-benchmark@v1
+        with:
+          name: "Benchmarks (${{ matrix.arch }})"
+          tool: googlecpp
+          output-file-path: bench_results.json
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          auto-push: false
+          gh-pages-branch: gh-pages
+          benchmark-data-dir-path: dev/bench/${{ matrix.arch }}
+          alert-threshold: "115%"
+          comment-on-alert: true
+          fail-on-alert: true
+
+      - name: Upload benchmark artifact
         uses: actions/upload-artifact@v4
         with:
-          name: bench-${{ runner.arch }}
+          name: bench-${{ matrix.arch }}
           path: bench_results.json
