@@ -146,6 +146,24 @@ TEST(MetricFamilyTest, MultipleConstLabels) {
     EXPECT_NE(out.find("version=\"2.0\""), std::string::npos);
 }
 
+// --- Collectable interface accessors ---
+
+TEST(MetricFamilyTest, HelpAccessor) {
+    prometheus::Registry reg;
+    auto& fam = reg.counter<FamLabels>("test_help_ctr", "My help text")
+        .required(FamLabels::Key::service)
+        .build();
+    EXPECT_EQ(fam.help(), "My help text");
+}
+
+TEST(MetricFamilyTest, NameAccessor) {
+    prometheus::Registry reg;
+    auto& fam = reg.counter<FamLabels>("test_name_ctr", "help")
+        .required(FamLabels::Key::service)
+        .build();
+    EXPECT_EQ(fam.name(), "test_name_ctr");
+}
+
 // --- Assertion behaviour (debug builds only) ---
 
 #ifndef NDEBUG

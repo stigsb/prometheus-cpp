@@ -229,6 +229,33 @@ TEST(TextSerializerTest, GaugeLargeValue) {
     EXPECT_TRUE(found) << "Output: " << out;
 }
 
+TEST(TextSerializerTest, LabelValueNewlineEscaping) {
+    prometheus::Registry reg;
+    auto& fam = reg.counter<SerLabels>("nl_metric", "Test newline")
+        .required(SerLabels::Key::service)
+        .build();
+    fam.get({.service = "api\nv2"}).inc(1);
+
+    auto out = reg.serialize();
+    EXPECT_NE(out.find("service=\"api\\nv2\""), std::string::npos);
+}
+
+PROMETHEUS_DEFINE_LABELS(NoLabels, (dummy, std::string_view));
+
+TEST(TextSerializerTest, HistogramNoDynamicLabelsHasLeBucket) {
+    prometheus::Registry reg;
+    auto& fam = reg.histogram<NoLabels>("no_dyn_hist", "No dynamic labels")
+        .buckets(100, 3)
+        .build();
+
+    fam.get({}).observe(50);
+
+    auto out = reg.serialize();
+    EXPECT_NE(out.find("le="), std::string::npos);
+    EXPECT_NE(out.find("le=\"+Inf\""), std::string::npos);
+    EXPECT_NE(out.find("no_dyn_hist_bucket{le="), std::string::npos);
+}
+
 TEST(TextSerializerTest, HelpTextEscaping) {
     prometheus::Registry reg;
     auto& fam = reg.counter<SerLabels>("help_escape", "Help with \\backslash and\nnewline")
