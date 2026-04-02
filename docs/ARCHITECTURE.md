@@ -92,11 +92,14 @@ struct AppLabels {
     // Compute a Mask from a LabelSet (which labels are populated)
     static constexpr Mask populated_mask(const LabelSet& ls) noexcept { /* ... */ }
 
-    // Serialise a single label value to string for map keying and exposition
+    // Serialise a single label value to string for exposition
     static std::string format_value(Key k, const LabelSet& ls);
 
     // All keys in declaration order (for iteration)
     static constexpr std::array<Key, count> all_keys() noexcept { /* ... */ }
+
+    // Zero-allocation FNV-1a hash of populated label values (used for map lookup)
+    static std::size_t hash_value(const LabelSet& ls, Mask allowed_mask) noexcept;
 };
 ```
 
@@ -405,17 +408,11 @@ local.merge_into(hist);  // N+1 atomic ops to publish
 
 Metric instances (`Counter`, `Gauge`, `Histogram`) are owned by their `MetricFamily` via `std::unique_ptr`. Stable pointers mean handles returned by `get()` remain valid for the lifetime of the registry. This is the contract that makes hot-path caching safe.
 
-### 5.2 Map Key Generation
+### 5.2 Hash-Based Lookup
 
-The map key for a given `LabelSet` is a canonical string constructed from only the labels that are in the family's allowed mask:
+The map key for a given `LabelSet` is a `std::size_t` hash computed by `detail::make_label_hash<LabelTraits>()`, which delegates to `LabelTraits::hash_value()`. The hash function is FNV-1a applied directly to the raw label values (strings hashed byte-by-byte, arithmetic types hashed over their byte representation), with a field-index separator byte mixed in between fields. Only labels in the family's allowed mask contribute to the hash.
 
-```
-"method=GET\x00service=api\x00status_code=200\x00"
-```
-
-Labels are sorted by their declaration order in the `Key` enum (which is also their bit position order). The null byte `\x00` is the separator to prevent collision between `{a="b", c="d"}` and `{a="bc", d=""}`.
-
-Key generation is done only on the first `get()` call for a label combination. Callers who hold onto the returned reference avoid all subsequent map overhead.
+This design is **zero-allocation on the fast path**: the hash is computed without constructing any intermediate strings. A display string (e.g. `service="api",method="GET"`) is only materialised on the first insert for a given label combination, via a lazy lambda passed to `MetricStore::get_or_create()`. Callers who hold onto the returned reference avoid all subsequent map overhead.
 
 ### 5.3 Concurrent Map
 
@@ -426,12 +423,24 @@ namespace detail {
 template <typename MetricT>
 class MetricStore {
     struct Entry {
-        std::string display_labels;    // formatted for exposition output
+        std::string display_labels;    // e.g. `service="api",method="GET"`
         std::unique_ptr<MetricT> metric;
     };
 
     mutable std::shared_mutex mutex_;
-    std::unordered_map<std::string, Entry> instances_;
+    std::unordered_map<std::size_t, Entry> instances_;  // keyed by label hash
+
+public:
+    // hash         – precomputed zero-allocation hash of label values
+    // make_display – callable() -> std::string  (only called on first insert)
+    // factory      – callable() -> unique_ptr<MetricT>
+    template <typename DisplayFn, typename Factory>
+    MetricT& get_or_create(std::size_t hash, DisplayFn&& make_display,
+                           Factory&& factory);
+
+    // Iterate over all instances; fn(display_labels, metric)
+    template <typename Fn>
+    void for_each(Fn&& fn) const;
 };
 }
 ```
@@ -441,9 +450,9 @@ class MetricStore {
 
 This design intentionally avoids lock-free structures. The contention occurs only on *new* label combinations, not on metric updates. Once a handle is obtained, updates go directly to the atomic value with no locking.
 
-### 5.4 Future Optimisation: Hazard Pointers / RCU
+### 5.4 Future Optimisation: Lock-Free Reads
 
-For applications where new label combinations are created after startup (e.g. per-user metrics), the `shared_mutex` could be replaced with an RCU scheme or a lock-free concurrent hash map (such as `libcuckoo` or `junction`). The storage abstraction is isolated behind an internal `MetricStore` concept, making this swap possible without changing public API.
+The current hash-based fast path already achieves zero allocation on reads (the `shared_lock` + hash lookup touches no allocator). For applications where new label combinations are created at very high frequency after startup (e.g. per-user metrics), the `shared_mutex` could be replaced with an RCU scheme or a lock-free concurrent hash map (such as `libcuckoo` or `junction`). The storage abstraction is isolated behind an internal `MetricStore` class, making this swap possible without changing public API.
 
 ---
 
@@ -889,8 +898,8 @@ prometheus-cpp/
 │           ├── assert.hpp             # PROMETHEUS_ASSERT macro (debug vs. release)
 │           ├── cache_line.hpp         # cache_line_size constant for false-sharing avoidance
 │           ├── check_names.hpp        # constexpr metric/label name validation
-│           ├── label_key.hpp          # Internal: canonical key string generation
-│           └── metric_store.hpp       # Internal: shared_mutex + unordered_map wrapper
+│           ├── label_key.hpp          # Internal: label hash + display string generation
+│           └── metric_store.hpp       # Internal: shared_mutex + hash-keyed unordered_map
 │
 ├── tests/
 │   ├── CMakeLists.txt
@@ -941,8 +950,8 @@ detail/check_names.hpp
     ← detail/label_key.hpp
     ← counter.hpp, gauge.hpp, histogram.hpp
   ← detail/metric_store.hpp
-    ← detail/label_key.hpp
   ← metric_family.hpp
+    ← detail/label_key.hpp
     ← detail/metric_store.hpp
     ← text_serializer.hpp
   ← metric_family_builder.hpp
