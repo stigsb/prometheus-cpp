@@ -19,10 +19,10 @@ A high-performance, header-only C++23 Prometheus client library.
 
 PROMETHEUS_DEFINE_LABELS(
     AppLabels,
-    (service,     std::string_view),
-    (method,      std::string_view),
+    (service,     std::string),
+    (method,      std::string),
     (status_code, uint32_t),
-    (region,      std::string_view)
+    (region,      std::string)
 );
 ```
 
@@ -184,12 +184,12 @@ Labels are defined at compile time as a typed aggregate. There are **no string k
 
 ```cpp
 PROMETHEUS_DEFINE_LABELS(AppLabels,
-    (service,  std::string_view),
-    (method,   std::string_view),
+    (service,  std::string),
+    (method,   std::string),
     (status,   uint32_t)
 );
 // AppLabels::Key::service, ::method, ::status are enum values (powers of two)
-// AppLabels::LabelSet is {optional<string_view>, optional<string_view>, optional<uint32_t>}
+// AppLabels::LabelSet is {optional<string>, optional<string>, optional<uint32_t>}
 ```
 
 When you call `.required(AppLabels::Key::service)`, the library records a bitmask of which labels must be populated on each call to `get()`. Missing required labels trigger a debug assertion (compiled away in release builds).

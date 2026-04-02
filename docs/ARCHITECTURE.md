@@ -47,11 +47,11 @@ The application defines its universe of labels once, using a provided macro. Thi
 
 PROMETHEUS_DEFINE_LABELS(
     AppLabels,                              // Name of the generated trait type
-    (service,     std::string_view),        // (field_name, value_type)
-    (method,      std::string_view),
+    (service,     std::string),              // (field_name, value_type)
+    (method,      std::string),
     (status_code, uint32_t),
-    (path,        std::string_view),
-    (environment, std::string_view)
+    (path,        std::string),
+    (environment, std::string)
 );
 ```
 
@@ -76,11 +76,11 @@ struct AppLabels {
     // ── Aggregate of all possible label values (optional fields) ─────────────
     // Called LabelSet — callers fill in only the fields that apply.
     struct LabelSet {
-        std::optional<std::string_view> service;
-        std::optional<std::string_view> method;
-        std::optional<uint32_t>         status_code;
-        std::optional<std::string_view> path;
-        std::optional<std::string_view> environment;
+        std::optional<std::string> service;
+        std::optional<std::string> method;
+        std::optional<uint32_t>    status_code;
+        std::optional<std::string> path;
+        std::optional<std::string> environment;
     };
 
     // ── Compile-time metadata ─────────────────────────────────────────────────
@@ -767,11 +767,11 @@ TEST(ConcurrencyTest, ConcurrentIncrements) {
 
 PROMETHEUS_DEFINE_LABELS(
     AppLabels,
-    (service,     std::string_view),
-    (method,      std::string_view),
+    (service,     std::string),
+    (method,      std::string),
     (status_code, uint32_t),
-    (db_table,    std::string_view),
-    (region,      std::string_view)
+    (db_table,    std::string),
+    (region,      std::string)
 );
 ```
 
@@ -812,8 +812,8 @@ struct AppMetrics {
 ### 10.3 Updating Metrics on the Hot Path
 
 ```cpp
-void handle_request(AppMetrics& m, std::string_view svc,
-                    std::string_view method, int64_t duration_us,
+void handle_request(AppMetrics& m, const std::string& svc,
+                    const std::string& method, int64_t duration_us,
                     uint32_t status)
 {
     // Obtain handles once and cache them (the fast path is just atomic ops)

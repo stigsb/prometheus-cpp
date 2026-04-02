@@ -94,9 +94,9 @@ auto& counter = family.Add({{"method", "GET"}, {"status", "200"}});
 #include <prometheus/label_def.hpp>
 
 PROMETHEUS_DEFINE_LABELS(HttpLabels,
-    (method,      std::string_view),
+    (method,      std::string),
     (status_code, uint32_t),
-    (service,     std::string_view)
+    (service,     std::string)
 );
 ```
 
@@ -313,9 +313,9 @@ int main() {
 #include <httplib.h>
 
 PROMETHEUS_DEFINE_LABELS(HttpLabels,
-    (method,      std::string_view),
+    (method,      std::string),
     (status_code, uint32_t),
-    (service,     std::string_view)
+    (service,     std::string)
 );
 
 int main() {
