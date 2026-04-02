@@ -54,10 +54,7 @@ static void BM_CounterInc_MT(benchmark::State& state) {
 }
 BENCHMARK(BM_CounterInc_MT)->ThreadRange(1, 16)->UseRealTime();
 
-// Counter increment with scale (to_double exercised at collection, but inc is same)
-// Actually, scale only matters at collection time, not at inc() time.
-// The inc() is always int64 fetch_add regardless of scale.
-// So let's benchmark inc with different delta sizes to show it doesn't matter.
+// Counter increment with different delta sizes
 static void BM_CounterIncDelta(benchmark::State& state) {
     prometheus::Registry reg;
     auto& fam = reg.counter<BenchLabels>("bench_counter_delta", "bench")
@@ -150,98 +147,10 @@ static void BM_HistogramObserve_LargeBuckets(benchmark::State& state) {
 }
 BENCHMARK(BM_HistogramObserve_LargeBuckets);
 
-// ── Static Histogram<N> variants ──────────────────────────────────────────
-
-static void BM_StaticHistogramObserve_SmallBuckets(benchmark::State& state) {
-    prometheus::Registry reg;
-    auto& fam = reg.histogram<BenchLabels, 4>("bench_shist_small", "bench")
-        .required(BenchLabels::Key::service)
-        .bounds(prometheus::make_bounds<4>(100))
-        .build();
-    auto& h = fam.get({.service = "api"});
-    int64_t v = 0;
-    for (auto _ : state) {
-        h.observe(v % 500);
-        v++;
-    }
-    state.SetItemsProcessed(state.iterations());
-}
-BENCHMARK(BM_StaticHistogramObserve_SmallBuckets);
-
-static void BM_StaticHistogramObserve_LargeBuckets(benchmark::State& state) {
-    prometheus::Registry reg;
-    auto& fam = reg.histogram<BenchLabels, 20>("bench_shist_large", "bench")
-        .required(BenchLabels::Key::service)
-        .bounds(prometheus::make_bounds<20>(1))
-        .build();
-    auto& h = fam.get({.service = "api"});
-    int64_t v = 0;
-    for (auto _ : state) {
-        h.observe(v % 300000);
-        v++;
-    }
-    state.SetItemsProcessed(state.iterations());
-}
-BENCHMARK(BM_StaticHistogramObserve_LargeBuckets);
-
-static void BM_StaticHistogramObserve_SmallBuckets_MT(benchmark::State& state) {
-    static prometheus::Registry* reg = nullptr;
-    static prometheus::Histogram<4>* hist = nullptr;
-
-    if (state.thread_index() == 0) {
-        reg = new prometheus::Registry();
-        auto& fam = reg->histogram<BenchLabels, 4>("bench_shist_small_mt", "bench")
-            .required(BenchLabels::Key::service)
-            .bounds(prometheus::make_bounds<4>(100))
-            .build();
-        hist = &fam.get({.service = "api"});
-    }
-
-    int64_t v = state.thread_index();
-    for (auto _ : state) {
-        hist->observe(v % 500);
-        v++;
-    }
-    state.SetItemsProcessed(state.iterations());
-
-    if (state.thread_index() == 0) {
-        delete reg;
-        reg = nullptr;
-    }
-}
-BENCHMARK(BM_StaticHistogramObserve_SmallBuckets_MT)->ThreadRange(1, 16)->UseRealTime();
-
-static void BM_StaticHistogramObserve_LargeBuckets_MT(benchmark::State& state) {
-    static prometheus::Registry* reg = nullptr;
-    static prometheus::Histogram<20>* hist = nullptr;
-
-    if (state.thread_index() == 0) {
-        reg = new prometheus::Registry();
-        auto& fam = reg->histogram<BenchLabels, 20>("bench_shist_large_mt", "bench")
-            .required(BenchLabels::Key::service)
-            .bounds(prometheus::make_bounds<20>(1))
-            .build();
-        hist = &fam.get({.service = "api"});
-    }
-
-    int64_t v = state.thread_index();
-    for (auto _ : state) {
-        hist->observe(v % 300000);
-        v++;
-    }
-    state.SetItemsProcessed(state.iterations());
-
-    if (state.thread_index() == 0) {
-        delete reg;
-        reg = nullptr;
-    }
-}
-BENCHMARK(BM_StaticHistogramObserve_LargeBuckets_MT)->ThreadRange(1, 16)->UseRealTime();
-
 // Histogram observe multi-threaded (small buckets)
 static void BM_HistogramObserve_SmallBuckets_MT(benchmark::State& state) {
     static prometheus::Registry* reg = nullptr;
-    static prometheus::DynamicHistogram* hist = nullptr;
+    static prometheus::Histogram* hist = nullptr;
 
     if (state.thread_index() == 0) {
         reg = new prometheus::Registry();
@@ -269,7 +178,7 @@ BENCHMARK(BM_HistogramObserve_SmallBuckets_MT)->ThreadRange(1, 16)->UseRealTime(
 // Histogram observe multi-threaded (large buckets)
 static void BM_HistogramObserve_LargeBuckets_MT(benchmark::State& state) {
     static prometheus::Registry* reg = nullptr;
-    static prometheus::DynamicHistogram* hist = nullptr;
+    static prometheus::Histogram* hist = nullptr;
 
     if (state.thread_index() == 0) {
         reg = new prometheus::Registry();
@@ -389,9 +298,8 @@ BENCHMARK(BM_Serialize);
 // ============================================================
 
 static void BM_LocalHistogramBatchObserve(benchmark::State& state) {
-    constexpr auto bounds = prometheus::make_bounds<4>(100);
-    prometheus::Histogram<4> hist(bounds);
-    prometheus::LocalHistogram<4> local(hist);
+    prometheus::Histogram hist(prometheus::Histogram::make_bounds(100, 4));
+    prometheus::LocalHistogram local(hist);
     constexpr int kBatch = 1000;
 
     for (auto _ : state) {
@@ -404,14 +312,13 @@ static void BM_LocalHistogramBatchObserve(benchmark::State& state) {
 BENCHMARK(BM_LocalHistogramBatchObserve);
 
 static void BM_LocalHistogramBatchObserve_MT(benchmark::State& state) {
-    static prometheus::Histogram<4>* hist = nullptr;
-    static constexpr auto bounds = prometheus::make_bounds<4>(100);
+    static prometheus::Histogram* hist = nullptr;
 
     if (state.thread_index() == 0) {
-        hist = new prometheus::Histogram<4>(bounds);
+        hist = new prometheus::Histogram(prometheus::Histogram::make_bounds(100, 4));
     }
 
-    prometheus::LocalHistogram<4> local(bounds);
+    prometheus::LocalHistogram local(*hist);
     constexpr int kBatch = 1000;
 
     for (auto _ : state) {

@@ -35,16 +35,8 @@ public:
         return {std::move(name), std::move(help), *this};
     }
 
-    // Dynamic histogram (backward compat) — called as registry.histogram<AppLabels>(...)
     template <typename LabelTraits>
-    MetricFamilyBuilder<LabelTraits, DynamicHistogram>
-    histogram(std::string name, std::string help) {
-        return {std::move(name), std::move(help), *this};
-    }
-
-    // Static histogram — called as registry.histogram<AppLabels, 8>(...)
-    template <typename LabelTraits, std::size_t N>
-    MetricFamilyBuilder<LabelTraits, Histogram<N>>
+    MetricFamilyBuilder<LabelTraits, Histogram>
     histogram(std::string name, std::string help) {
         return {std::move(name), std::move(help), *this};
     }

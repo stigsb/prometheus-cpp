@@ -21,7 +21,7 @@ namespace prometheus {
 class Registry; // defined in registry.hpp
 
 // Fluent builder returned by Registry::counter<LT>(), ::gauge<LT>(), ::histogram<LT>().
-// Call .required()/.optional()/.const_label()/.buckets()/.bounds()/.scale() then .build().
+// Call .required()/.optional()/.const_label()/.buckets()/.scale()/.unit() then .build().
 template <typename LabelTraits, typename MetricT>
 class MetricFamilyBuilder {
 public:
@@ -31,18 +31,14 @@ public:
         , registry_(reg)
     {
         PROMETHEUS_ASSERT(detail::check_metric_name(name_));
-        // Set up default factory based on type
-        if constexpr (!HistogramLike<MetricT>) {
-            // Counter, Gauge, etc.
+        if constexpr (!std::is_same_v<MetricT, Histogram>) {
             factory_ = []{ return std::make_unique<MetricT>(); };
-        } else if constexpr (std::is_same_v<MetricT, DynamicHistogram>) {
+        } else {
             // Default: 8 power-of-two buckets starting at 100
             factory_ = []{
-                return std::make_unique<DynamicHistogram>(
-                    DynamicHistogram::make_bounds(100, 8));
+                return std::make_unique<Histogram>(Histogram::make_bounds(100, 8));
             };
         }
-        // For Histogram<N>: factory_ is empty until bounds() is called
     }
 
     auto& required(std::same_as<typename LabelTraits::Key> auto... keys) {
@@ -63,34 +59,24 @@ public:
         return *this;
     }
 
-    // DynamicHistogram: power-of-two buckets from min
+    // Power-of-two buckets: {min, min*2, ..., INT64_MAX}, total count buckets
     auto& buckets(int64_t min, std::size_t count)
-        requires std::same_as<MetricT, DynamicHistogram>
+        requires std::same_as<MetricT, Histogram>
     {
         factory_ = [min, count]{
-            return std::make_unique<DynamicHistogram>(
-                DynamicHistogram::make_bounds(min, count));
+            return std::make_unique<Histogram>(Histogram::make_bounds(min, count));
         };
         return *this;
     }
 
-    // DynamicHistogram: explicit boundaries
+    // Custom bucket boundaries
     auto& buckets(std::vector<int64_t> boundaries)
-        requires std::same_as<MetricT, DynamicHistogram>
+        requires std::same_as<MetricT, Histogram>
     {
-        auto b = DynamicHistogram::make_bounds(std::move(boundaries));
+        auto b = Histogram::make_bounds(std::move(boundaries));
         factory_ = [b = std::move(b)]{
-            return std::make_unique<DynamicHistogram>(b);
+            return std::make_unique<Histogram>(b);
         };
-        return *this;
-    }
-
-    // Histogram<N>: compile-time-sized bounds array
-    template <std::size_t BucketCount>
-    auto& bounds(std::array<int64_t, BucketCount> b)
-        requires HistogramLike<MetricT> && (!std::is_same_v<MetricT, DynamicHistogram>)
-    {
-        factory_ = [b]{ return std::make_unique<MetricT>(b); };
         return *this;
     }
 

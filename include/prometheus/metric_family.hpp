@@ -75,7 +75,7 @@ public:
     MetricType type() const noexcept override {
         if constexpr (std::is_same_v<MetricT, Counter>)    return MetricType::Counter;
         else if constexpr (std::is_same_v<MetricT, Gauge>) return MetricType::Gauge;
-        else if constexpr (HistogramLike<MetricT>)         return MetricType::Histogram;
+        else if constexpr (std::is_same_v<MetricT, Histogram>) return MetricType::Histogram;
         else {
             static_assert(sizeof(MetricT) == 0, "Unknown metric type");
             return MetricType::Counter; // unreachable
@@ -85,9 +85,9 @@ public:
     void collect(TextSerializer& ser) const override {
         ser.write_header(name_, help_, type());
 
-        if constexpr (HistogramLike<MetricT>) {
+        if constexpr (std::is_same_v<MetricT, Histogram>) {
             store_.for_each([&](const std::string& dyn, const MetricT& h) {
-                const std::size_t n = h.num_buckets_runtime();
+                const std::size_t n = h.num_buckets();
                 int64_t cum = 0;
                 for (std::size_t i = 0; i < n; ++i) {
                     cum += h.bucket_count(i);

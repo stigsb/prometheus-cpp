@@ -113,7 +113,7 @@ TEST(MetricFamilyTest, HistogramCustomBuckets) {
         .build();
     auto& h = fam.get({.service = "svc"});
     h.observe(150);
-    EXPECT_EQ(h.num_buckets_runtime(), 4u); // 3 custom + +Inf
+    EXPECT_EQ(h.num_buckets(), 4u); // 3 custom + +Inf
 }
 
 // --- Const labels appear in output ---
