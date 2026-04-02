@@ -1,9 +1,24 @@
 #pragma once
 
 #include <string>
+#include <string_view>
 #include <cstdint>
 
 namespace prometheus::detail {
+
+inline std::string escape_label_value(std::string_view sv) {
+    std::string out;
+    out.reserve(sv.size());
+    for (char c : sv) {
+        switch (c) {
+            case '\\': out += "\\\\"; break;
+            case '"':  out += "\\\""; break;
+            case '\n': out += "\\n";  break;
+            default:   out += c;      break;
+        }
+    }
+    return out;
+}
 
 // Canonical map key: "key=val\0key2=val2\0" (null-separated, no display formatting)
 template <typename LabelTraits>
@@ -33,7 +48,7 @@ std::string make_label_display(const typename LabelTraits::LabelSet& ls,
             if (!result.empty()) result += ',';
             result += LabelTraits::key_name(k);
             result += "=\"";
-            result += LabelTraits::format_value(k, ls);
+            result += escape_label_value(LabelTraits::format_value(k, ls));
             result += '"';
         }
     }

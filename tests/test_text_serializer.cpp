@@ -124,3 +124,27 @@ TEST(TextSerializerTest, FormatDoubleLocaleIndependent) {
     EXPECT_EQ(prometheus::TextSerializer::format_double(0.001), "0.001");
     EXPECT_EQ(prometheus::TextSerializer::format_double(100.0), "100");
 }
+
+TEST(TextSerializerTest, LabelValueEscaping) {
+    prometheus::Registry reg;
+    auto& fam = reg.counter<SerLabels>("escaped_metric", "Test escaping")
+        .required(SerLabels::Key::service)
+        .build();
+    fam.get({.service = "has\"quote"}).inc(1);
+
+    auto out = reg.serialize();
+    // The quote in the value must be escaped as \"
+    EXPECT_NE(out.find("has\\\"quote"), std::string::npos);
+}
+
+TEST(TextSerializerTest, LabelValueBackslashEscaping) {
+    prometheus::Registry reg;
+    auto& fam = reg.counter<SerLabels>("bs_metric", "Test backslash")
+        .required(SerLabels::Key::service)
+        .build();
+    fam.get({.service = "path\\to\\thing"}).inc(1);
+
+    auto out = reg.serialize();
+    // Each backslash must be escaped as \\
+    EXPECT_NE(out.find("path\\\\to\\\\thing"), std::string::npos);
+}
