@@ -43,11 +43,12 @@ auto& requests = registry.counter<AppLabels>(
     .const_label("region", "us-east-1")
     .build();
 
-// Histogram: request latency in microseconds
+// Histogram: request latency in microseconds, exposed as seconds
 auto& latency = registry.histogram<AppLabels>(
-        "http_request_duration_us", "Request latency in microseconds")
+        "http_request_duration_seconds", "Request latency")
     .required(AppLabels::Key::service, AppLabels::Key::method)
     .buckets(/*min_upper_bound=*/100, /*count=*/14)  // 100, 200, 400 ... µs
+    .unit(prometheus::units::microseconds)            // auto-scales to seconds at scrape time
     .build();
 
 // Gauge: currently active connections
@@ -124,6 +125,59 @@ Conversion to `double` happens only at scrape time (typically every 15–30 seco
 
 ---
 
+## Unit System
+
+The library provides a `Unit` type for semantic scale factors. Instead of manually computing scale values, use a predefined unit to automatically convert integer values to the appropriate base unit at scrape time:
+
+```cpp
+auto& latency = registry.histogram<AppLabels>(
+        "http_request_duration_seconds", "Request latency")
+    .required(AppLabels::Key::service, AppLabels::Key::method)
+    .buckets(100, 14)
+    .unit(prometheus::units::microseconds)  // stores µs, exposes seconds
+    .build();
+```
+
+Predefined units in `prometheus::units::`:
+
+| Category | Units | Base unit |
+|---|---|---|
+| Duration | `nanoseconds`, `microseconds`, `milliseconds`, `seconds` | seconds |
+| Data size | `bytes`, `kilobytes`, `megabytes`, `gigabytes`, `kibibytes`, `mebibytes`, `gibibytes` | bytes |
+| Energy | `joules`, `kilojoules`, `megajoules` | joules |
+| Temperature | `celsius`, `fahrenheit`, `kelvin` | (each is its own base) |
+| Ratios | `ratio`, `percent` | ratio |
+| Dimensionless | `none` | (no unit) |
+
+Custom units can be created at compile time:
+
+```cpp
+constexpr auto millivolts = prometheus::units::custom("millivolts", 0.001, "volts", "_volts");
+```
+
+---
+
+## LocalHistogram
+
+For high-throughput scenarios where many observations happen on the same thread (e.g. processing a batch of events), `LocalHistogram` avoids all atomic contention on the hot path:
+
+```cpp
+auto& hist = latency.get({.service = "api", .method = "POST"});
+
+// Create a thread-local accumulator (borrows bounds from the histogram)
+prometheus::LocalHistogram local(hist);
+
+for (auto& event : batch) {
+    local.observe(event.duration_us);  // pure local write — no atomics
+}
+
+local.merge_into(hist);  // N+1 atomic ops to flush all accumulated counts
+```
+
+`LocalHistogram::observe()` uses plain integer increments (no atomics, no cache-line bouncing). Call `merge_into()` when you're ready to publish the accumulated counts to the shared `Histogram`.
+
+---
+
 ## Label System
 
 Labels are defined at compile time as a typed aggregate. There are **no string keys at runtime** — label names exist only in compile-time metadata and in the scrape formatter.
@@ -163,7 +217,7 @@ ctest --test-dir build --output-on-failure
 include(FetchContent)
 FetchContent_Declare(
     prometheus-client-cpp
-    GIT_REPOSITORY https://github.com/your-org/prometheus-client-cpp
+    GIT_REPOSITORY https://github.com/stigsb/prometheus-cpp
     GIT_TAG        main
 )
 FetchContent_MakeAvailable(prometheus-client-cpp)
@@ -178,6 +232,15 @@ target_link_libraries(my_app PRIVATE prometheus-client-cpp)
 - C++23 (Clang ≥ 17, GCC ≥ 13, MSVC 2022 17.8+)
 - No external runtime dependencies
 - GoogleTest (tests only, fetched automatically by CMake)
+- Google Benchmark (benchmarks only, fetched automatically by CMake)
+
+### Running benchmarks
+
+```bash
+cmake -B build -DCMAKE_BUILD_TYPE=Release -DPROMETHEUS_BUILD_BENCHMARKS=ON
+cmake --build build
+./build/bench/prometheus_bench
+```
 
 ---
 
@@ -188,9 +251,11 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full design document co
 - Label system and LabelMask design
 - Metric family builder API
 - Counter / Gauge / Histogram internals
+- Unit system for semantic scale factors
+- LocalHistogram for batch observation
 - Storage model and concurrency
 - Collection and Prometheus text exposition
-- Testing strategy
+- Testing strategy and benchmarks
 - File layout and build system
 
 ---

@@ -13,10 +13,11 @@ A high-performance, header-only C++23 Prometheus client library optimized for me
 5. [Storage Model](#5-storage-model)
 6. [Collection and Exposition](#6-collection-and-exposition)
 7. [Concurrency Model](#7-concurrency-model)
-8. [Testing Strategy](#8-testing-strategy)
-9. [API Examples](#9-api-examples)
-10. [File and Module Layout](#10-file-and-module-layout)
-11. [Build System](#11-build-system)
+8. [Unit System](#8-unit-system)
+9. [Testing Strategy](#9-testing-strategy)
+10. [API Examples](#10-api-examples)
+11. [File and Module Layout](#11-file-and-module-layout)
+12. [Build System](#12-build-system)
 
 ---
 
@@ -176,6 +177,14 @@ public:
     // (only participates in overload resolution for MetricT = Histogram)
     auto& buckets(int64_t min_upper_bound, std::size_t count) &
         requires std::same_as<MetricT, Histogram>;
+    auto& buckets(std::vector<int64_t> boundaries) &
+        requires std::same_as<MetricT, Histogram>;
+
+    // Scale factor applied at scrape time (int64 value * scale = double output)
+    auto& scale(double s) &;
+
+    // Semantic unit — sets scale_ = u.scale (see §8 Unit System)
+    auto& unit(const Unit& u) &;
 
     // Finalise and register with the owning registry.
     // Returns a reference that lives as long as the registry.
@@ -241,56 +250,43 @@ A monotonically increasing integer. Only `inc()` is exposed; decrement is not pe
 // In prometheus/counter.hpp
 namespace prometheus {
 
-class Counter {
+class alignas(detail::cache_line_size) Counter {
 public:
     // Hot path — single LOCK XADD on x86
-    void inc(int64_t delta = 1) noexcept {
-        PROMETHEUS_ASSERT(delta >= 0);
-        value_.fetch_add(delta, std::memory_order_relaxed);
-    }
+    void inc(int64_t delta = 1) noexcept;
 
     // Read — used by the exposition layer only
-    [[nodiscard]] int64_t load() const noexcept {
-        return value_.load(std::memory_order_relaxed);
-    }
+    [[nodiscard]] int64_t load() const noexcept;
 
     // Convert to double with optional scale (e.g. 1e-6 for µs → s)
-    [[nodiscard]] double to_double(double scale = 1.0) const noexcept {
-        return static_cast<double>(load()) * scale;
-    }
+    [[nodiscard]] double to_double(double scale = 1.0) const noexcept;
+
+    void reset() noexcept;
 
 private:
     std::atomic<int64_t> value_{0};
-    // Pad to cache line to avoid false sharing between sibling counters
-    // in arrays — only enabled when the metric is stored in an array.
-    // (See §5 for the storage layout.)
 };
 
 } // namespace prometheus
 ```
+
+The `alignas(detail::cache_line_size)` ensures Counter objects on the heap don't share cache lines, preventing false sharing between sibling counters.
 
 ### 4.2 Gauge
 
 Can increase or decrease. Supports atomic set (for sampling point-in-time values).
 
 ```cpp
-class Gauge {
+class alignas(detail::cache_line_size) Gauge {
 public:
-    void set(int64_t v) noexcept {
-        value_.store(v, std::memory_order_relaxed);
-    }
-    void inc(int64_t delta = 1) noexcept {
-        value_.fetch_add(delta, std::memory_order_relaxed);
-    }
-    void dec(int64_t delta = 1) noexcept {
-        value_.fetch_add(-delta, std::memory_order_relaxed);
-    }
-    [[nodiscard]] int64_t load() const noexcept {
-        return value_.load(std::memory_order_relaxed);
-    }
-    [[nodiscard]] double to_double(double scale = 1.0) const noexcept {
-        return static_cast<double>(load()) * scale;
-    }
+    void set(int64_t v) noexcept;
+    void inc(int64_t delta = 1) noexcept;
+    void dec(int64_t delta = 1) noexcept;
+    [[nodiscard]] int64_t load() const noexcept;
+    [[nodiscard]] double to_double(double scale = 1.0) const noexcept;
+
+    // Store current Unix epoch seconds
+    void set_to_current_time() noexcept;
 
 private:
     std::atomic<int64_t> value_{0};
@@ -299,63 +295,107 @@ private:
 
 ### 4.3 Histogram
 
-The most complex metric type. Stores a fixed array of bucket counts plus a running sum.
+The most complex metric type. Stores a runtime-sized vector of bucket counts plus a running sum.
 
-**Bucket definition:** The caller provides a minimum upper bound and a count. Boundaries are:
+**Bucket definition:** The caller provides a minimum upper bound and a count. Boundaries are power-of-two multiples:
 
 ```
 upper_bounds[0] = min_upper_bound
 upper_bounds[i] = upper_bounds[i-1] * 2      for i in [1, count-2]
-upper_bounds[count-1] = +∞  (the "le=+Inf" bucket)
+upper_bounds[count-1] = INT64_MAX  (represents +Inf)
 ```
 
 Example: `min=100, count=8` → `100, 200, 400, 800, 1600, 3200, 6400, +Inf` (all in the same integer unit as the observed values).
 
+Alternatively, custom boundaries can be provided via `make_bounds(std::vector<int64_t>)` — `INT64_MAX` is appended automatically if not already present.
+
 ```cpp
-// N is the number of buckets including +Inf, known at compile time.
-// For runtime-defined bucket counts, N = std::dynamic_extent (see below).
-template <std::size_t N = std::dynamic_extent>
 class Histogram {
 public:
-    // Constructed by MetricFamily with the resolved bucket boundaries
-    explicit Histogram(std::span<const int64_t, N> upper_bounds);
+    explicit Histogram(std::vector<int64_t> upper_bounds);
 
     // Hot path — O(log N) binary search + 2 atomic ops
-    void observe(int64_t value) noexcept {
-        // Find the first bucket whose upper bound >= value
-        const auto it = std::ranges::lower_bound(upper_bounds_, value);
-        const auto idx = static_cast<std::size_t>(it - upper_bounds_.begin());
-        bucket_counts_[idx].fetch_add(1, std::memory_order_relaxed);
-        sum_.fetch_add(value, std::memory_order_relaxed);
-    }
+    void observe(int64_t value) noexcept;
 
-    // Scrape-time accessors
-    [[nodiscard]] int64_t bucket_count(std::size_t idx) const noexcept {
-        return bucket_counts_[idx].load(std::memory_order_relaxed);
-    }
-    [[nodiscard]] int64_t sum() const noexcept {
-        return sum_.load(std::memory_order_relaxed);
-    }
-    [[nodiscard]] int64_t total_count() const noexcept {
-        return bucket_counts_.back().load(std::memory_order_relaxed);
-    }
-    [[nodiscard]] std::size_t num_buckets() const noexcept { return N; }
-    [[nodiscard]] int64_t upper_bound(std::size_t idx) const noexcept {
-        return upper_bounds_[idx]; // last is sentinel INT64_MAX
-    }
+    // Per-bucket count (non-cumulative — the raw count for this bucket only)
+    [[nodiscard]] int64_t bucket_count(std::size_t idx) const noexcept;
+    // Cumulative count: sum of bucket_count(0..idx)
+    [[nodiscard]] int64_t cumulative_count(std::size_t idx) const noexcept;
+    [[nodiscard]] int64_t sum() const noexcept;
+    // Total count across all buckets (sum of all bucket_count values)
+    [[nodiscard]] int64_t total_count() const noexcept;
+    [[nodiscard]] std::size_t num_buckets() const noexcept;
+    [[nodiscard]] int64_t upper_bound(std::size_t idx) const noexcept;
+    [[nodiscard]] const std::vector<int64_t>& bounds() const noexcept;
+
+    // Merge support (used by LocalHistogram)
+    void add_to_bucket(std::size_t idx, int64_t delta) noexcept;
+    void add_to_sum(int64_t delta) noexcept;
+
+    // Static factory methods
+    static constexpr std::vector<int64_t> make_bounds(int64_t min, std::size_t count);
+    static constexpr std::vector<int64_t> make_bounds(std::vector<int64_t> boundaries);
 
 private:
-    // Bucket upper bounds; last entry is INT64_MAX (represents +Inf)
-    std::array<int64_t, N> upper_bounds_;
-    // One counter per bucket; last bucket accumulates everything > max bound
-    std::array<std::atomic<int64_t>, N> bucket_counts_{};
-    std::atomic<int64_t> sum_{0};
+    std::vector<int64_t> upper_bounds_;
+    std::vector<std::atomic<int64_t>> bucket_counts_;
+    alignas(detail::cache_line_size) std::atomic<int64_t> sum_{0};
 };
 ```
 
-**Note on `std::atomic<int64_t>` in arrays:** `std::atomic` is not copyable. Histogram objects are therefore never copied; they are created in-place via `std::make_unique` and accessed through stable pointers.
+There is also a convenience free function template:
 
-**Scale factor for histograms:** The `MetricFamily<..., Histogram>` stores a `double scale` (default `1.0`). At scrape time, `sum` is multiplied by `scale` and the bucket upper bounds are formatted accordingly. This lets callers store microseconds internally but expose seconds to Prometheus without floating-point arithmetic on the hot path.
+```cpp
+template <std::size_t N>
+std::vector<int64_t> make_bounds(int64_t min);
+// e.g. make_bounds<5>(100) creates 5-bucket power-of-two bounds
+```
+
+**Histogram semantics:** `observe()` increments only the single matching bucket (the first bucket whose upper bound ≥ the observed value). Cumulative counts are computed at scrape time via `cumulative_count()`, which sums buckets `0..idx`. This trades a single extra pass at scrape time (negligible, since scraping is infrequent) for a simpler, faster `observe()` with only two atomic operations (`fetch_add` on the bucket count and `fetch_add` on the sum).
+
+**Note on `std::atomic<int64_t>` in vectors:** `std::atomic` is not copyable. Histogram objects are therefore never copied; they are created in-place via `std::make_unique` and accessed through stable pointers.
+
+**Scale factor for histograms:** The `MetricFamily<..., Histogram>` stores a `double scale_` (default `1.0`). At scrape time, `sum` is multiplied by `scale_` and the bucket upper bounds are formatted accordingly. This lets callers store microseconds internally but expose seconds to Prometheus without floating-point arithmetic on the hot path. The scale can be set directly via `.scale(double)` or semantically via `.unit(prometheus::units::microseconds)` (see [§8 Unit System](#8-unit-system)).
+
+### 4.4 LocalHistogram
+
+A per-thread accumulator that avoids all atomic contention on the hot path. Useful for batch-processing scenarios where many observations happen on the same thread before being flushed.
+
+```cpp
+class LocalHistogram {
+public:
+    // Borrows bounds from the target histogram — histogram must outlive this object
+    explicit LocalHistogram(const Histogram& target);
+
+    // Hot path: pure local writes, no atomics, no cache-line bouncing
+    void observe(int64_t value) noexcept;
+
+    // Flush accumulated counts into the shared histogram (N+1 atomic ops)
+    void merge_into(Histogram& target) noexcept;
+
+    // Discard accumulated data without merging
+    void reset() noexcept;
+
+private:
+    const std::vector<int64_t>& upper_bounds_;  // borrows from histogram
+    std::vector<int64_t> counts_;                // plain integers, no atomics
+    int64_t sum_;
+};
+```
+
+**Usage pattern:**
+
+```cpp
+auto& hist = latency.get({.service = "api", .method = "POST"});
+prometheus::LocalHistogram local(hist);
+
+for (auto& event : batch) {
+    local.observe(event.duration_us);  // no atomics
+}
+local.merge_into(hist);  // N+1 atomic ops to publish
+```
+
+`merge_into()` only issues atomic operations for non-zero buckets, and resets the local counts to zero after merging.
 
 ---
 
@@ -379,14 +419,21 @@ Key generation is done only on the first `get()` call for a label combination. C
 
 ### 5.3 Concurrent Map
 
+Metric instance storage is encapsulated in `detail::MetricStore<MetricT>`:
+
 ```cpp
-template <typename LabelTraits, typename MetricT>
-class MetricFamily {
-    // ...
-private:
+namespace detail {
+template <typename MetricT>
+class MetricStore {
+    struct Entry {
+        std::string display_labels;    // formatted for exposition output
+        std::unique_ptr<MetricT> metric;
+    };
+
     mutable std::shared_mutex mutex_;
-    std::unordered_map<std::string, std::unique_ptr<MetricT>> instances_;
+    std::unordered_map<std::string, Entry> instances_;
 };
+}
 ```
 
 - **Reads** (the common case after startup): `std::shared_lock` — multiple threads can look up the same or different label combinations simultaneously.
@@ -447,6 +494,7 @@ public:
 private:
     mutable std::shared_mutex mutex_;
     std::vector<std::unique_ptr<Collectable>> families_;
+    std::unordered_map<std::string, MetricType> registered_names_;  // duplicate detection
 };
 ```
 
@@ -507,10 +555,11 @@ The exposition layer uses `std::memory_order_relaxed` for reading as well. The s
 
 ### 7.3 False Sharing
 
-When multiple `Counter` objects are allocated adjacently (e.g. in a `std::unordered_map`), writes to one can invalidate the cache line of another, degrading throughput on multi-core systems. The library addresses this by:
+When multiple metric objects are allocated adjacently, writes to one can invalidate the cache line of another, degrading throughput on multi-core systems. The library addresses this by:
 
-1. Allocating each metric instance via `std::make_unique` — heap allocation naturally separates objects onto different cache lines most of the time.
-2. Providing an optional `alignas(64)` wrapper for use cases where callers manage their own metric arrays.
+1. `Counter` and `Gauge` are declared `alignas(detail::cache_line_size)`, ensuring each instance occupies its own cache line regardless of allocation strategy.
+2. `Histogram::sum_` is similarly aligned to `detail::cache_line_size` to separate it from the bucket array.
+3. `detail::cache_line_size` uses `std::hardware_destructive_interference_size` when available, falling back to 64 bytes (correct for x86-64, ARM64, and POWER).
 
 ### 7.4 The int64 Trick — Detail
 
@@ -534,9 +583,70 @@ Under high contention (many threads incrementing the same metric), the CAS loop 
 
 ---
 
-## 8. Testing Strategy
+## 8. Unit System
 
-### 8.1 Unit Testing Metric Values
+### 8.1 Motivation
+
+Prometheus best practice is to expose metrics in base SI units (seconds, bytes, etc.), but applications naturally work in convenient integer units (microseconds, megabytes, etc.). The Unit system bridges this gap by attaching a semantic scale factor to a metric family, so the library automatically converts at scrape time.
+
+### 8.2 The `Unit` Struct
+
+```cpp
+// In prometheus/unit.hpp
+namespace prometheus {
+
+struct Unit {
+    std::string_view name;         // human label: "microseconds"
+    double           scale;        // multiply stored int64 by this to get base unit
+    std::string_view base_name;    // "seconds", "bytes", "joules"
+    std::string_view base_suffix;  // "_seconds", "_bytes" (for reference, not auto-applied)
+};
+
+} // namespace prometheus
+```
+
+### 8.3 Predefined Units
+
+All predefined units live in the `prometheus::units::` namespace:
+
+| Category | Units | Scale examples | Base unit |
+|---|---|---|---|
+| Duration | `nanoseconds`, `microseconds`, `milliseconds`, `seconds` | 1e-9, 1e-6, 1e-3, 1.0 | seconds |
+| Data size | `bytes`, `kilobytes`, `megabytes`, `gigabytes` | 1, 1e3, 1e6, 1e9 | bytes |
+| Data size (binary) | `kibibytes`, `mebibytes`, `gibibytes` | 1024, 1048576, 1073741824 | bytes |
+| Energy | `joules`, `kilojoules`, `megajoules` | 1, 1e3, 1e6 | joules |
+| Temperature | `celsius`, `fahrenheit`, `kelvin` | all 1.0 | (each is its own base) |
+| Ratios | `ratio`, `percent` | 1.0, 0.01 | ratio |
+| Dimensionless | `none` | 1.0 | (no unit) |
+
+### 8.4 Custom Units
+
+Custom units can be created at compile time using `consteval`:
+
+```cpp
+constexpr auto millivolts = prometheus::units::custom("millivolts", 0.001, "volts", "_volts");
+```
+
+### 8.5 Usage with MetricFamilyBuilder
+
+The `.unit()` method on `MetricFamilyBuilder` sets the scale factor from the unit:
+
+```cpp
+auto& latency = registry.histogram<AppLabels>(
+        "http_request_duration_seconds", "Request latency")
+    .required(AppLabels::Key::service, AppLabels::Key::method)
+    .buckets(100, 14)
+    .unit(prometheus::units::microseconds)  // scale_ = 1e-6
+    .build();
+```
+
+At scrape time, bucket `le=` labels and `_sum` values are multiplied by the scale factor. For example, a stored sum of `5000000` (microseconds) is exposed as `5.0` (seconds).
+
+---
+
+## 9. Testing Strategy
+
+### 9.1 Unit Testing Metric Values
 
 Metrics expose a `load()` method that returns the raw `int64_t`. This is sufficient for unit tests without any mocking:
 
@@ -555,7 +665,7 @@ TEST(CounterTest, IncrementByDelta) {
 }
 ```
 
-### 8.2 Unit Testing MetricFamily
+### 9.2 Unit Testing MetricFamily
 
 ```cpp
 TEST(MetricFamilyTest, RequiredLabelEnforced) {
@@ -574,7 +684,7 @@ TEST(MetricFamilyTest, RequiredLabelEnforced) {
 }
 ```
 
-### 8.3 Unit Testing Histogram Buckets
+### 9.3 Unit Testing Histogram Buckets
 
 ```cpp
 TEST(HistogramTest, ObservePopulatesBuckets) {
@@ -590,20 +700,26 @@ TEST(HistogramTest, ObservePopulatesBuckets) {
     h.observe(150);  // → bucket[1] (le=200)
     h.observe(500);  // → bucket[3] (le=+Inf)
 
-    EXPECT_EQ(h.bucket_count(0), 1);  // cumulative: ≤100
-    EXPECT_EQ(h.bucket_count(1), 2);  // cumulative: ≤200
-    EXPECT_EQ(h.bucket_count(2), 2);  // cumulative: ≤400
-    EXPECT_EQ(h.bucket_count(3), 3);  // cumulative: +Inf
+    // bucket_count() returns the per-bucket (non-cumulative) count
+    EXPECT_EQ(h.bucket_count(0), 1);  // le=100: just the 50
+    EXPECT_EQ(h.bucket_count(1), 1);  // le=200: just the 150
+    EXPECT_EQ(h.bucket_count(2), 0);  // le=400: nothing
+    EXPECT_EQ(h.bucket_count(3), 1);  // le=+Inf: just the 500
+
+    // cumulative_count() returns the Prometheus-style cumulative count
+    EXPECT_EQ(h.cumulative_count(0), 1);  // ≤100
+    EXPECT_EQ(h.cumulative_count(1), 2);  // ≤200
+    EXPECT_EQ(h.cumulative_count(2), 2);  // ≤400
+    EXPECT_EQ(h.cumulative_count(3), 3);  // ≤+Inf
+
     EXPECT_EQ(h.sum(), 700);
     EXPECT_EQ(h.total_count(), 3);
 }
 ```
 
-**Note on histogram semantics:** Prometheus histograms are cumulative — `bucket_count(i)` is the count of observations ≤ `upper_bound(i)`. The `observe()` method therefore increments *all* buckets from the matched index to `+Inf`...
+**Histogram semantics:** `observe()` increments only the single matching bucket. Cumulative sums (as required by the Prometheus exposition format) are computed at scrape time via `cumulative_count()`. This trades one extra pass at scrape time (negligible) for a faster `observe()` with only two atomic operations.
 
-**Actually, preferred approach:** Increment only the specific bucket and compute cumulative sums at serialisation time. This trades a single extra pass at scrape time (negligible) for simpler, faster `observe()` with a single `fetch_add`. This is the approach used here.
-
-### 8.4 Testing Exposition Output
+### 9.4 Testing Exposition Output
 
 ```cpp
 TEST(ExpositionTest, CounterTextFormat) {
@@ -621,7 +737,7 @@ TEST(ExpositionTest, CounterTextFormat) {
 }
 ```
 
-### 8.5 Concurrency Tests
+### 9.5 Concurrency Tests
 
 Stress tests use multiple threads concurrently calling `inc()` and verify the final value:
 
@@ -640,9 +756,9 @@ TEST(ConcurrencyTest, ConcurrentIncrements) {
 
 ---
 
-## 9. API Examples
+## 10. API Examples
 
-### 9.1 Defining Labels (once, per application)
+### 10.1 Defining Labels (once, per application)
 
 ```cpp
 // my_app/labels.hpp
@@ -659,7 +775,7 @@ PROMETHEUS_DEFINE_LABELS(
 );
 ```
 
-### 9.2 Creating a Registry and Registering Metrics
+### 10.2 Creating a Registry and Registering Metrics
 
 ```cpp
 // my_app/metrics.hpp
@@ -693,7 +809,7 @@ struct AppMetrics {
 };
 ```
 
-### 9.3 Updating Metrics on the Hot Path
+### 10.3 Updating Metrics on the Hot Path
 
 ```cpp
 void handle_request(AppMetrics& m, std::string_view svc,
@@ -735,11 +851,11 @@ struct ApiHandler {
     }
 
     prometheus::Counter&   reqs_;
-    prometheus::Histogram<>& lat_;
+    prometheus::Histogram& lat_;
 };
 ```
 
-### 9.4 Scraping (HTTP handler)
+### 10.4 Scraping (HTTP handler)
 
 ```cpp
 // Using cpp-httplib or similar
@@ -751,54 +867,60 @@ svr.Get("/metrics", [&](const httplib::Request&, httplib::Response& res) {
 
 ---
 
-## 10. File and Module Layout
+## 11. File and Module Layout
 
 ```
 prometheus-client-cpp/
 │
 ├── include/
 │   └── prometheus/
-│       ├── prometheus.hpp        # Convenience all-in-one include
-│       ├── label_def.hpp         # PROMETHEUS_DEFINE_LABELS macro + LabelMask
-│       ├── label_mask.hpp        # make_mask<>, LabelMask<> alias
-│       ├── counter.hpp           # Counter class
-│       ├── gauge.hpp             # Gauge class
-│       ├── histogram.hpp         # Histogram<N> class template
-│       ├── metric_family.hpp     # MetricFamily<LabelTraits, MetricT>
+│       ├── prometheus.hpp             # Convenience all-in-one include
+│       ├── label_def.hpp              # PROMETHEUS_DEFINE_LABELS macro
+│       ├── label_mask.hpp             # make_mask<>, LabelMask<> alias
+│       ├── counter.hpp                # Counter class
+│       ├── gauge.hpp                  # Gauge class
+│       ├── histogram.hpp              # Histogram + LocalHistogram classes
+│       ├── unit.hpp                   # Unit struct + predefined units (§8)
+│       ├── metric_family.hpp          # MetricFamily<LabelTraits, MetricT>
 │       ├── metric_family_builder.hpp  # Builder returned by Registry::counter() etc.
-│       ├── registry.hpp          # Registry class
-│       ├── text_serializer.hpp   # Prometheus text format writer
+│       ├── registry.hpp               # Registry class
+│       ├── text_serializer.hpp        # Prometheus text format writer
 │       └── detail/
-│           ├── label_key.hpp     # Internal: canonical key string generation
-│           ├── metric_store.hpp  # Internal: shared_mutex + unordered_map wrapper
-│           └── assert.hpp        # PROMETHEUS_ASSERT macro (debug vs. release)
-│
-├── src/
-│   └── (empty — fully header-only)
+│           ├── assert.hpp             # PROMETHEUS_ASSERT macro (debug vs. release)
+│           ├── cache_line.hpp         # cache_line_size constant for false-sharing avoidance
+│           ├── check_names.hpp        # constexpr metric/label name validation
+│           ├── label_key.hpp          # Internal: canonical key string generation
+│           └── metric_store.hpp       # Internal: shared_mutex + unordered_map wrapper
 │
 ├── tests/
 │   ├── CMakeLists.txt
-│   ├── test_label_def.cpp        # Macro expansion, mask generation
-│   ├── test_counter.cpp          # Counter unit tests
-│   ├── test_gauge.cpp            # Gauge unit tests
-│   ├── test_histogram.cpp        # Histogram bucket logic
-│   ├── test_metric_family.cpp    # Builder, get(), required/optional validation
-│   ├── test_registry.cpp         # Registry registration, serialization
-│   ├── test_text_serializer.cpp  # Prometheus text format correctness
-│   └── test_concurrency.cpp      # Multi-threaded stress tests
+│   ├── test_label_def.cpp             # Macro expansion, mask generation
+│   ├── test_counter.cpp               # Counter unit tests
+│   ├── test_gauge.cpp                 # Gauge unit tests
+│   ├── test_histogram.cpp             # Histogram + LocalHistogram bucket logic
+│   ├── test_unit.cpp                  # Unit system scaling tests
+│   ├── test_check_names.cpp           # Metric/label name validation
+│   ├── test_metric_family.cpp         # Builder, get(), required/optional validation
+│   ├── test_registry.cpp              # Registry registration, serialization
+│   ├── test_text_serializer.cpp       # Prometheus text format correctness
+│   └── test_concurrency.cpp           # Multi-threaded stress tests
+│
+├── bench/
+│   ├── CMakeLists.txt
+│   └── bench.cpp                      # Google Benchmark suite (counter, gauge,
+│                                      #   histogram, LocalHistogram, serialization)
 │
 ├── examples/
 │   ├── CMakeLists.txt
-│   ├── basic_usage.cpp           # Minimal working example
-│   └── http_server_example.cpp   # With cpp-httplib integration
+│   └── basic_usage.cpp                # Minimal working example
 │
 ├── docs/
-│   └── ARCHITECTURE.md           # This document
+│   └── ARCHITECTURE.md                # This document
 │
 ├── cmake/
-│   └── Dependencies.cmake        # FetchContent for GoogleTest, optional deps
+│   └── Dependencies.cmake             # FetchContent for GoogleTest, Benchmark, cpp-httplib
 │
-├── CMakeLists.txt                # Top-level build (C++23, header-only target)
+├── CMakeLists.txt                     # Top-level build (C++23, header-only target)
 └── README.md
 ```
 
@@ -806,12 +928,15 @@ prometheus-client-cpp/
 
 ```
 detail/assert.hpp
+detail/cache_line.hpp
+detail/check_names.hpp
   ← label_mask.hpp
     ← label_def.hpp (includes label_mask.hpp)
   ← detail/label_key.hpp
-  ← counter.hpp
-  ← gauge.hpp
-  ← histogram.hpp
+  ← counter.hpp (includes detail/assert.hpp, detail/cache_line.hpp)
+  ← gauge.hpp (includes detail/cache_line.hpp)
+  ← histogram.hpp (includes detail/cache_line.hpp; defines Histogram + LocalHistogram)
+  ← unit.hpp
   ← text_serializer.hpp
     ← detail/label_key.hpp
     ← counter.hpp, gauge.hpp, histogram.hpp
@@ -821,7 +946,7 @@ detail/assert.hpp
     ← detail/metric_store.hpp
     ← text_serializer.hpp
   ← metric_family_builder.hpp
-    ← metric_family.hpp
+    ← metric_family.hpp, unit.hpp, detail/check_names.hpp
   ← registry.hpp
     ← metric_family_builder.hpp
 ← prometheus.hpp  (includes all of the above)
@@ -829,9 +954,9 @@ detail/assert.hpp
 
 ---
 
-## 11. Build System
+## 12. Build System
 
-### 11.1 CMake Structure
+### 12.1 CMake Structure
 
 The library is header-only and is exposed as an `INTERFACE` target:
 
@@ -850,17 +975,18 @@ Consumers add the library with a single line:
 target_link_libraries(my_app PRIVATE prometheus-client-cpp)
 ```
 
-### 11.2 Dependencies
+### 12.2 Dependencies
 
 | Dependency | Usage | How obtained |
 |---|---|---|
 | C++ standard library | Everything | System |
-| GoogleTest | Tests only | `FetchContent` |
-| cpp-httplib | Examples only | `FetchContent` (optional) |
+| GoogleTest v1.15.2 | Tests only | `FetchContent` |
+| Google Benchmark v1.9.1 | Benchmarks only | `FetchContent` |
+| cpp-httplib v0.18.0 | Examples only | `FetchContent` (optional) |
 
 No runtime external dependencies. The library uses only standard C++23 facilities.
 
-### 11.3 Compiler Requirements
+### 12.3 Compiler Requirements
 
 | Compiler | Minimum version | Notes |
 |---|---|---|
@@ -868,7 +994,7 @@ No runtime external dependencies. The library uses only standard C++23 facilitie
 | GCC | 13 | Full C++23 support |
 | MSVC | 19.38 (VS 2022 17.8) | C++23 mode (`/std:c++latest`) |
 
-### 11.4 Recommended Build Flags
+### 12.4 Recommended Build Flags
 
 ```cmake
 # In CMakePresets.json or toolchain file
