@@ -55,4 +55,11 @@ std::string make_label_display(const typename LabelTraits::LabelSet& ls,
     return result;
 }
 
+// Zero-allocation hash of label values (delegates to LabelTraits::hash_value)
+template <typename LabelTraits>
+std::size_t make_label_hash(const typename LabelTraits::LabelSet& ls,
+                            typename LabelTraits::Mask allowed_mask) noexcept {
+    return LabelTraits::hash_value(ls, allowed_mask);
+}
+
 } // namespace prometheus::detail

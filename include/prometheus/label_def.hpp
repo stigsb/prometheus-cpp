@@ -22,6 +22,32 @@ std::string label_to_string(const T& v) {
         return std::string(v);
 }
 
+// ── FNV-1a hash helpers (zero-allocation for string/arithmetic types) ───────
+
+constexpr std::size_t fnv1a_basis = 14695981039346656037ULL;
+constexpr std::size_t fnv1a_prime = 1099511628211ULL;
+
+inline void hash_mix_byte(std::size_t& h, uint8_t b) noexcept {
+    h ^= b;
+    h *= fnv1a_prime;
+}
+
+inline void hash_label_field(std::size_t& h, std::string_view v) noexcept {
+    for (char c : v) hash_mix_byte(h, static_cast<uint8_t>(c));
+}
+
+inline void hash_label_field(std::size_t& h, const std::string& v) noexcept {
+    hash_label_field(h, std::string_view(v));
+}
+
+template <typename T>
+    requires std::is_arithmetic_v<T>
+inline void hash_label_field(std::size_t& h, T v) noexcept {
+    const auto* bytes = reinterpret_cast<const uint8_t*>(&v);
+    for (std::size_t i = 0; i < sizeof(T); ++i)
+        hash_mix_byte(h, bytes[i]);
+}
+
 } // namespace prometheus::detail
 
 // ── Preprocessor helpers ────────────────────────────────────────────────────
@@ -165,6 +191,17 @@ std::string label_to_string(const T& v) {
 #define PROMETHEUS_PP_GEN_KEY(idx, pair) \
     Key::PROMETHEUS_PP_PAIR_NAME(pair)
 
+// hash_value() per-field hash accumulator (zero-allocation)
+#define PROMETHEUS_PP_GEN_HASH(idx, pair) \
+    if (allowed_mask & static_cast<uint64_t>(Key::PROMETHEUS_PP_PAIR_NAME(pair))) { \
+        ::prometheus::detail::hash_mix_byte(h, static_cast<uint8_t>(idx)); \
+        if (ls.PROMETHEUS_PP_PAIR_NAME(pair).has_value()) { \
+            ::prometheus::detail::hash_label_field(h, *ls.PROMETHEUS_PP_PAIR_NAME(pair)); \
+        } else { \
+            ::prometheus::detail::hash_mix_byte(h, 0xFF); \
+        } \
+    }
+
 // ── Public macro ────────────────────────────────────────────────────────────
 
 /**
@@ -220,5 +257,12 @@ struct Name {                                                                  \
         return {                                                               \
             PROMETHEUS_PP_FOR_EACH_IDX_COMMA(PROMETHEUS_PP_GEN_KEY, __VA_ARGS__) \
         };                                                                     \
+    }                                                                          \
+                                                                               \
+    static std::size_t hash_value(const LabelSet& ls,                          \
+                                  Mask allowed_mask) noexcept {                \
+        std::size_t h = ::prometheus::detail::fnv1a_basis;                     \
+        PROMETHEUS_PP_FOR_EACH_IDX(PROMETHEUS_PP_GEN_HASH, __VA_ARGS__)        \
+        return h;                                                              \
     }                                                                          \
 }
