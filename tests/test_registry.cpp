@@ -90,4 +90,16 @@ TEST(RegistryTest, DuplicateNameAborts) {
             .build(),
         "duplicate metric family name");
 }
+
+TEST(RegistryTest, DifferentTypeConflictAborts) {
+    prometheus::Registry reg;
+    reg.counter<RegLabels>("conflict_name", "as counter")
+        .required(RegLabels::Key::service)
+        .build();
+    EXPECT_DEATH(
+        reg.gauge<RegLabels>("conflict_name", "as gauge")
+            .required(RegLabels::Key::service)
+            .build(),
+        "conflicting type");
+}
 #endif
