@@ -1,7 +1,7 @@
 #include <gtest/gtest.h>
 #include <prometheus/prometheus.hpp>
 
-#include <stdexcept>
+
 
 PROMETHEUS_DEFINE_LABELS(FamLabels,
     (service, std::string_view),
@@ -139,21 +139,21 @@ TEST(MetricFamilyTest, MultipleConstLabels) {
 
 #ifndef NDEBUG
 
-TEST(MetricFamilyTest, RequiredLabelMissingThrows) {
+TEST(MetricFamilyTest, RequiredLabelMissingAborts) {
     prometheus::Registry reg;
     auto& fam = reg.counter<FamLabels>("reqs", "help")
         .required(FamLabels::Key::service)
         .build();
-    EXPECT_THROW(fam.get({}), std::runtime_error);
+    EXPECT_DEATH(fam.get({}), "assertion failed");
 }
 
-TEST(MetricFamilyTest, ForbiddenLabelThrows) {
+TEST(MetricFamilyTest, ForbiddenLabelAborts) {
     prometheus::Registry reg;
     auto& fam = reg.counter<FamLabels>("reqs", "help")
         .required(FamLabels::Key::service)
         .build();
     // method is not required or optional -> forbidden
-    EXPECT_THROW(fam.get({.service = "api", .method = "GET"}), std::runtime_error);
+    EXPECT_DEATH(fam.get({.service = "api", .method = "GET"}), "assertion failed");
 }
 
 #endif // !NDEBUG

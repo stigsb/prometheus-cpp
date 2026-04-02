@@ -1,15 +1,16 @@
 #pragma once
 
 #ifndef NDEBUG
-#include <stdexcept>
-#include <string>
+#include <cstdio>
+#include <cstdlib>
 
 #define PROMETHEUS_ASSERT(cond)                                              \
     do {                                                                      \
         if (!(cond)) {                                                        \
-            throw std::runtime_error(                                         \
-                std::string("prometheus assertion failed: ") + #cond +        \
-                " at " + __FILE__ + ":" + std::to_string(__LINE__));          \
+            std::fprintf(stderr,                                              \
+                "prometheus assertion failed: %s at %s:%d\n",                 \
+                #cond, __FILE__, __LINE__);                                   \
+            std::abort();                                                     \
         }                                                                     \
     } while (false)
 #else

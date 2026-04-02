@@ -27,24 +27,24 @@ public:
         , registry_(reg)
     {}
 
-    auto& required(std::same_as<typename LabelTraits::Key> auto... keys) & {
+    auto& required(std::same_as<typename LabelTraits::Key> auto... keys) {
         if constexpr (sizeof...(keys) > 0)
             required_mask_ |= (static_cast<uint64_t>(keys) | ...);
         return *this;
     }
 
-    auto& optional(std::same_as<typename LabelTraits::Key> auto... keys) & {
+    auto& optional(std::same_as<typename LabelTraits::Key> auto... keys) {
         if constexpr (sizeof...(keys) > 0)
             optional_mask_ |= (static_cast<uint64_t>(keys) | ...);
         return *this;
     }
 
-    auto& const_label(std::string k, std::string v) & {
+    auto& const_label(std::string k, std::string v) {
         const_labels_.emplace_back(std::move(k), std::move(v));
         return *this;
     }
 
-    auto& buckets(int64_t min, std::size_t count) &
+    auto& buckets(int64_t min, std::size_t count) 
         requires std::same_as<MetricT, Histogram>
     {
         bucket_min_   = min;
@@ -52,7 +52,7 @@ public:
         return *this;
     }
 
-    auto& scale(double s) & {
+    auto& scale(double s) {
         scale_ = s;
         return *this;
     }

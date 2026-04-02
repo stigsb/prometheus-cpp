@@ -8,6 +8,7 @@
 #include <prometheus/text_serializer.hpp>
 
 #include <memory>
+#include <mutex>
 #include <shared_mutex>
 #include <sstream>
 #include <string>
