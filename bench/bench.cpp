@@ -150,6 +150,94 @@ static void BM_HistogramObserve_LargeBuckets(benchmark::State& state) {
 }
 BENCHMARK(BM_HistogramObserve_LargeBuckets);
 
+// ── Static Histogram<N> variants ──────────────────────────────────────────
+
+static void BM_StaticHistogramObserve_SmallBuckets(benchmark::State& state) {
+    prometheus::Registry reg;
+    auto& fam = reg.histogram<BenchLabels, 4>("bench_shist_small", "bench")
+        .required(BenchLabels::Key::service)
+        .bounds(prometheus::make_bounds<4>(100))
+        .build();
+    auto& h = fam.get({.service = "api"});
+    int64_t v = 0;
+    for (auto _ : state) {
+        h.observe(v % 500);
+        v++;
+    }
+    state.SetItemsProcessed(state.iterations());
+}
+BENCHMARK(BM_StaticHistogramObserve_SmallBuckets);
+
+static void BM_StaticHistogramObserve_LargeBuckets(benchmark::State& state) {
+    prometheus::Registry reg;
+    auto& fam = reg.histogram<BenchLabels, 20>("bench_shist_large", "bench")
+        .required(BenchLabels::Key::service)
+        .bounds(prometheus::make_bounds<20>(1))
+        .build();
+    auto& h = fam.get({.service = "api"});
+    int64_t v = 0;
+    for (auto _ : state) {
+        h.observe(v % 300000);
+        v++;
+    }
+    state.SetItemsProcessed(state.iterations());
+}
+BENCHMARK(BM_StaticHistogramObserve_LargeBuckets);
+
+static void BM_StaticHistogramObserve_SmallBuckets_MT(benchmark::State& state) {
+    static prometheus::Registry* reg = nullptr;
+    static prometheus::Histogram<4>* hist = nullptr;
+
+    if (state.thread_index() == 0) {
+        reg = new prometheus::Registry();
+        auto& fam = reg->histogram<BenchLabels, 4>("bench_shist_small_mt", "bench")
+            .required(BenchLabels::Key::service)
+            .bounds(prometheus::make_bounds<4>(100))
+            .build();
+        hist = &fam.get({.service = "api"});
+    }
+
+    int64_t v = state.thread_index();
+    for (auto _ : state) {
+        hist->observe(v % 500);
+        v++;
+    }
+    state.SetItemsProcessed(state.iterations());
+
+    if (state.thread_index() == 0) {
+        delete reg;
+        reg = nullptr;
+    }
+}
+BENCHMARK(BM_StaticHistogramObserve_SmallBuckets_MT)->ThreadRange(1, 16)->UseRealTime();
+
+static void BM_StaticHistogramObserve_LargeBuckets_MT(benchmark::State& state) {
+    static prometheus::Registry* reg = nullptr;
+    static prometheus::Histogram<20>* hist = nullptr;
+
+    if (state.thread_index() == 0) {
+        reg = new prometheus::Registry();
+        auto& fam = reg->histogram<BenchLabels, 20>("bench_shist_large_mt", "bench")
+            .required(BenchLabels::Key::service)
+            .bounds(prometheus::make_bounds<20>(1))
+            .build();
+        hist = &fam.get({.service = "api"});
+    }
+
+    int64_t v = state.thread_index();
+    for (auto _ : state) {
+        hist->observe(v % 300000);
+        v++;
+    }
+    state.SetItemsProcessed(state.iterations());
+
+    if (state.thread_index() == 0) {
+        delete reg;
+        reg = nullptr;
+    }
+}
+BENCHMARK(BM_StaticHistogramObserve_LargeBuckets_MT)->ThreadRange(1, 16)->UseRealTime();
+
 // Histogram observe multi-threaded (small buckets)
 static void BM_HistogramObserve_SmallBuckets_MT(benchmark::State& state) {
     static prometheus::Registry* reg = nullptr;
