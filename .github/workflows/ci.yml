@@ -12,16 +12,24 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - name: GCC 13
+          - name: GCC 13 (x64)
             os: ubuntu-24.04
             cc: gcc-13
             cxx: g++-13
-          - name: GCC 14
+          - name: GCC 14 (x64)
             os: ubuntu-24.04
             cc: gcc-14
             cxx: g++-14
-          - name: Clang 18
+          - name: Clang 18 (x64)
             os: ubuntu-24.04
+            cc: clang-18
+            cxx: clang++-18
+          - name: GCC 14 (arm64)
+            os: ubuntu-24.04-arm
+            cc: gcc-14
+            cxx: g++-14
+          - name: Clang 18 (arm64)
+            os: ubuntu-24.04-arm
             cc: clang-18
             cxx: clang++-18
 
@@ -78,3 +86,58 @@ jobs:
 
       - name: Test
         run: ctest --test-dir build --output-on-failure -j$(nproc)
+
+  benchmarks:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Bench (x64)
+            os: ubuntu-24.04
+            cc: gcc-14
+            cxx: g++-14
+          - name: Bench (arm64)
+            os: ubuntu-24.04-arm
+            cc: gcc-14
+            cxx: g++-14
+
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        env:
+          CC: ${{ matrix.cc }}
+          CXX: ${{ matrix.cxx }}
+        run: |
+          cmake -B build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DPROMETHEUS_BUILD_BENCHMARKS=ON
+
+      - name: Build
+        run: cmake --build build -j$(nproc)
+
+      - name: Run benchmarks
+        run: |
+          echo "## $(uname -m) — $(nproc) cores"
+          echo ""
+          ./build/bench/prometheus_bench \
+            --benchmark_repetitions=3 \
+            --benchmark_report_aggregates_only=true \
+            --benchmark_format=console 2>&1 | grep '_mean'
+
+      - name: Run benchmarks (JSON)
+        run: |
+          ./build/bench/prometheus_bench \
+            --benchmark_repetitions=3 \
+            --benchmark_report_aggregates_only=true \
+            --benchmark_out=bench_results.json \
+            --benchmark_out_format=json
+
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v4
+        with:
+          name: bench-${{ runner.arch }}
+          path: bench_results.json
