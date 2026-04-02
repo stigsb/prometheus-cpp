@@ -85,6 +85,19 @@ public:
         return upper_bounds_[idx];
     }
 
+    [[nodiscard]] constexpr const std::array<int64_t, N>& bounds() const noexcept {
+        return upper_bounds_;
+    }
+
+    // Merge support: add delta to a specific bucket (used by LocalHistogram)
+    void add_to_bucket(std::size_t idx, int64_t delta) noexcept {
+        bucket_counts_[idx].fetch_add(delta, std::memory_order_relaxed);
+    }
+
+    void add_to_sum(int64_t delta) noexcept {
+        sum_.fetch_add(delta, std::memory_order_relaxed);
+    }
+
 private:
     std::array<int64_t, N> upper_bounds_;
     std::array<std::atomic<int64_t>, N> bucket_counts_;
@@ -141,6 +154,15 @@ public:
         return upper_bounds_[idx];
     }
 
+    // Merge support: add delta to a specific bucket (used by LocalDynamicHistogram)
+    void add_to_bucket(std::size_t idx, int64_t delta) noexcept {
+        bucket_counts_[idx].fetch_add(delta, std::memory_order_relaxed);
+    }
+
+    void add_to_sum(int64_t delta) noexcept {
+        sum_.fetch_add(delta, std::memory_order_relaxed);
+    }
+
     // Helpers for vector-based bounds
     static std::vector<int64_t> make_bounds(std::vector<int64_t> boundaries) {
         if (boundaries.empty() || boundaries.back() != INT64_MAX)
@@ -164,6 +186,111 @@ private:
     std::vector<int64_t> upper_bounds_;
     std::vector<std::atomic<int64_t>> bucket_counts_;
     alignas(detail::cache_line_size) std::atomic<int64_t> sum_{0};
+};
+
+// ── Local accumulator for batch observation (no atomics on hot path) ────────
+
+// For Histogram<N>: compile-time-sized local accumulator
+template <std::size_t N>
+class LocalHistogram {
+public:
+    // Construct from a Histogram<N> — borrows its bounds by reference
+    explicit constexpr LocalHistogram(const Histogram<N>& target)
+        : upper_bounds_(target.bounds()), counts_{}, sum_{0} {}
+
+    // Or from a raw bounds array
+    explicit constexpr LocalHistogram(const std::array<int64_t, N>& upper_bounds)
+        : upper_bounds_(upper_bounds), counts_{}, sum_{0} {}
+
+    // Hot path: pure local writes, no atomics, no cache line bouncing
+    void observe(int64_t value) noexcept {
+        auto it = std::lower_bound(upper_bounds_.begin(), upper_bounds_.end(), value);
+        auto idx = static_cast<std::size_t>(it - upper_bounds_.begin());
+        counts_[idx]++;
+        sum_ += value;
+    }
+
+    // Merge accumulated counts into the real histogram (N+1 atomic ops)
+    void merge_into(Histogram<N>& target) noexcept {
+        for (std::size_t i = 0; i < N; ++i) {
+            if (counts_[i] != 0) {
+                target.add_to_bucket(i, counts_[i]);
+                counts_[i] = 0;
+            }
+        }
+        if (sum_ != 0) {
+            target.add_to_sum(sum_);
+            sum_ = 0;
+        }
+    }
+
+    // Reset without merging (discard accumulated data)
+    void reset() noexcept {
+        counts_.fill(0);
+        sum_ = 0;
+    }
+
+private:
+    const std::array<int64_t, N>& upper_bounds_;  // reference to histogram's bounds
+    std::array<int64_t, N> counts_;
+    int64_t sum_;
+};
+
+// For DynamicHistogram: runtime-sized local accumulator
+class LocalDynamicHistogram {
+public:
+    explicit LocalDynamicHistogram(const DynamicHistogram& target)
+        : upper_bounds_ptr_(&target)
+        , counts_(target.num_buckets_runtime(), 0)
+        , sum_{0} {}
+
+    void observe(int64_t value) noexcept {
+        auto n = counts_.size();
+        // Linear scan for small N, binary search otherwise
+        std::size_t idx = 0;
+        if (n > 8) {
+            // Can't access private upper_bounds_, use upper_bound() accessor
+            // Binary search manually
+            std::size_t lo = 0, hi = n;
+            while (lo < hi) {
+                auto mid = lo + (hi - lo) / 2;
+                if (upper_bounds_ptr_->upper_bound(mid) < value)
+                    lo = mid + 1;
+                else
+                    hi = mid;
+            }
+            idx = lo;
+        } else {
+            while (idx < n && upper_bounds_ptr_->upper_bound(idx) < value)
+                ++idx;
+        }
+        if (idx >= n) idx = n - 1;
+        counts_[idx]++;
+        sum_ += value;
+    }
+
+    void merge_into(DynamicHistogram& target) noexcept {
+        for (std::size_t i = 0; i < counts_.size(); ++i) {
+            if (counts_[i] != 0) {
+                target.add_to_bucket(i, counts_[i]);
+                counts_[i] = 0;
+            }
+        }
+        if (sum_ != 0) {
+            target.add_to_sum(sum_);
+            sum_ = 0;
+        }
+    }
+
+    void reset() noexcept {
+        std::fill(counts_.begin(), counts_.end(), 0);
+        sum_ = 0;
+    }
+
+private:
+    const DynamicHistogram* upper_bounds_ptr_;
+    std::vector<int64_t> counts_;
+    int64_t sum_;
 };
 
 // ── Concept: anything that looks like a histogram ───────────────────────────

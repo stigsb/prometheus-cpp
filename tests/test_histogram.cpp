@@ -329,3 +329,102 @@ TEST(StaticHistogramTest, ConcurrentObserveSameBucket) {
     EXPECT_EQ(h.bucket_count(0), static_cast<int64_t>(kThreads) * kIters);
     EXPECT_EQ(h.sum(), static_cast<int64_t>(kThreads) * kIters * 50);
 }
+
+// ── LocalHistogram tests ────────────────────────────────────────────────────
+
+TEST(LocalHistogramTest, BasicAccumulate) {
+    constexpr auto bounds = prometheus::make_bounds<4>(100);
+    prometheus::Histogram<4> hist(bounds);
+    prometheus::LocalHistogram<4> local(hist);
+
+    // Accumulate locally (no atomics)
+    local.observe(50);   // bucket 0
+    local.observe(150);  // bucket 1
+    local.observe(500);  // bucket 3 (+Inf)
+
+    // Not yet merged — histogram should be empty
+    EXPECT_EQ(hist.total_count(), 0);
+    EXPECT_EQ(hist.sum(), 0);
+
+    // Merge
+    local.merge_into(hist);
+
+    EXPECT_EQ(hist.total_count(), 3);
+    EXPECT_EQ(hist.sum(), 700);
+    EXPECT_EQ(hist.bucket_count(0), 1);
+    EXPECT_EQ(hist.bucket_count(1), 1);
+    EXPECT_EQ(hist.bucket_count(3), 1);
+}
+
+TEST(LocalHistogramTest, MergeResetsLocal) {
+    constexpr auto bounds = prometheus::make_bounds<4>(100);
+    prometheus::Histogram<4> hist(bounds);
+    prometheus::LocalHistogram<4> local(hist);
+
+    local.observe(50);
+    local.merge_into(hist);
+
+    // Merge again — should add nothing
+    local.merge_into(hist);
+    EXPECT_EQ(hist.total_count(), 1);
+    EXPECT_EQ(hist.sum(), 50);
+}
+
+TEST(LocalHistogramTest, MultipleMerges) {
+    constexpr auto bounds = prometheus::make_bounds<4>(100);
+    prometheus::Histogram<4> hist(bounds);
+    prometheus::LocalHistogram<4> local(hist);
+
+    // Batch 1
+    for (int i = 0; i < 1000; ++i)
+        local.observe(50);
+    local.merge_into(hist);
+
+    // Batch 2
+    for (int i = 0; i < 500; ++i)
+        local.observe(150);
+    local.merge_into(hist);
+
+    EXPECT_EQ(hist.total_count(), 1500);
+    EXPECT_EQ(hist.bucket_count(0), 1000);
+    EXPECT_EQ(hist.bucket_count(1), 500);
+    EXPECT_EQ(hist.sum(), 1000 * 50 + 500 * 150);
+}
+
+TEST(LocalHistogramTest, Reset) {
+    constexpr auto bounds = prometheus::make_bounds<4>(100);
+    prometheus::Histogram<4> hist(bounds);
+    prometheus::LocalHistogram<4> local(hist);
+
+    local.observe(50);
+    local.observe(150);
+    local.reset();  // discard without merging
+    local.merge_into(hist);
+
+    EXPECT_EQ(hist.total_count(), 0);
+    EXPECT_EQ(hist.sum(), 0);
+}
+
+TEST(LocalHistogramTest, ConcurrentLocalMerge) {
+    // Each thread has its own LocalHistogram, merges into shared Histogram
+    constexpr auto bounds = prometheus::make_bounds<4>(100);
+    prometheus::Histogram<4> hist(bounds);
+
+    constexpr int kThreads = 8;
+    constexpr int kBatchSize = 100'000;
+
+    std::vector<std::jthread> workers;
+    workers.reserve(kThreads);
+    for (int t = 0; t < kThreads; ++t) {
+        workers.emplace_back([&hist, &bounds] {
+            prometheus::LocalHistogram<4> local(bounds);
+            for (int i = 0; i < kBatchSize; ++i)
+                local.observe(50);
+            local.merge_into(hist);
+        });
+    }
+    workers.clear();
+
+    EXPECT_EQ(hist.total_count(), kThreads * kBatchSize);
+    EXPECT_EQ(hist.sum(), static_cast<int64_t>(kThreads) * kBatchSize * 50);
+}

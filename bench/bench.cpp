@@ -383,3 +383,47 @@ static void BM_Serialize(benchmark::State& state) {
     state.SetItemsProcessed(state.iterations());
 }
 BENCHMARK(BM_Serialize);
+
+// ============================================================
+// LocalHistogram batch observe + merge (amortized atomic cost)
+// ============================================================
+
+static void BM_LocalHistogramBatchObserve(benchmark::State& state) {
+    constexpr auto bounds = prometheus::make_bounds<4>(100);
+    prometheus::Histogram<4> hist(bounds);
+    prometheus::LocalHistogram<4> local(hist);
+    constexpr int kBatch = 1000;
+
+    for (auto _ : state) {
+        for (int i = 0; i < kBatch; ++i)
+            local.observe(i % 500);
+        local.merge_into(hist);
+    }
+    state.SetItemsProcessed(state.iterations() * kBatch);
+}
+BENCHMARK(BM_LocalHistogramBatchObserve);
+
+static void BM_LocalHistogramBatchObserve_MT(benchmark::State& state) {
+    static prometheus::Histogram<4>* hist = nullptr;
+    static constexpr auto bounds = prometheus::make_bounds<4>(100);
+
+    if (state.thread_index() == 0) {
+        hist = new prometheus::Histogram<4>(bounds);
+    }
+
+    prometheus::LocalHistogram<4> local(bounds);
+    constexpr int kBatch = 1000;
+
+    for (auto _ : state) {
+        for (int i = 0; i < kBatch; ++i)
+            local.observe(i % 500);
+        local.merge_into(*hist);
+    }
+    state.SetItemsProcessed(state.iterations() * kBatch);
+
+    if (state.thread_index() == 0) {
+        delete hist;
+        hist = nullptr;
+    }
+}
+BENCHMARK(BM_LocalHistogramBatchObserve_MT)->ThreadRange(1, 16)->UseRealTime();
