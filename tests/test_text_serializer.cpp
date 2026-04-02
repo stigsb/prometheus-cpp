@@ -194,3 +194,45 @@ TEST(TextSerializerTest, NoInstancesSerialization) {
     EXPECT_NE(out.find("# HELP no_instances"), std::string::npos);
     EXPECT_NE(out.find("# TYPE no_instances counter"), std::string::npos);
 }
+
+TEST(TextSerializerTest, GaugeZeroValue) {
+    prometheus::Registry reg;
+    auto& fam = reg.gauge<SerLabels>("zero_gauge", "Zero gauge")
+        .required(SerLabels::Key::service)
+        .build();
+    fam.get({.service = "api"});  // default 0
+    auto out = reg.serialize();
+    EXPECT_NE(out.find("} 0\n"), std::string::npos);
+}
+
+TEST(TextSerializerTest, GaugeNegativeValue) {
+    prometheus::Registry reg;
+    auto& fam = reg.gauge<SerLabels>("neg_gauge", "Negative gauge")
+        .required(SerLabels::Key::service)
+        .build();
+    fam.get({.service = "api"}).set(-42);
+    auto out = reg.serialize();
+    EXPECT_NE(out.find("-42"), std::string::npos);
+}
+
+TEST(TextSerializerTest, GaugeLargeValue) {
+    prometheus::Registry reg;
+    auto& fam = reg.gauge<SerLabels>("large_gauge", "Large gauge")
+        .required(SerLabels::Key::service)
+        .build();
+    fam.get({.service = "api"}).set(1'000'000'000'000LL);
+    auto out = reg.serialize();
+    EXPECT_NE(out.find("1000000000000"), std::string::npos);
+}
+
+TEST(TextSerializerTest, HelpTextEscaping) {
+    prometheus::Registry reg;
+    auto& fam = reg.counter<SerLabels>("help_escape", "Help with \\backslash and\nnewline")
+        .required(SerLabels::Key::service)
+        .build();
+    fam.get({.service = "api"}).inc(1);
+    auto out = reg.serialize();
+    // Backslash should be escaped, newline should be escaped
+    EXPECT_NE(out.find("\\\\backslash"), std::string::npos);
+    EXPECT_NE(out.find("\\n"), std::string::npos);
+}

@@ -17,8 +17,21 @@ class TextSerializer {
 public:
     explicit TextSerializer(std::ostream& out) : out_(out) {}
 
+    static std::string escape_help(std::string_view help) {
+        std::string out;
+        out.reserve(help.size());
+        for (char c : help) {
+            switch (c) {
+                case '\\': out += "\\\\"; break;
+                case '\n': out += "\\n";  break;
+                default:   out += c;      break;
+            }
+        }
+        return out;
+    }
+
     void write_header(std::string_view name, std::string_view help, MetricType type) {
-        out_ << "# HELP " << name << ' ' << help << '\n';
+        out_ << "# HELP " << name << ' ' << escape_help(help) << '\n';
         out_ << "# TYPE " << name << ' ';
         switch (type) {
             case MetricType::Counter:   out_ << "counter";   break;
