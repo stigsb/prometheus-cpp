@@ -1,5 +1,8 @@
 # prometheus-client-cpp
 
+[![CI](https://github.com/stigsb/prometheus-cpp/actions/workflows/ci.yml/badge.svg)](https://github.com/stigsb/prometheus-cpp/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/stigsb/prometheus-cpp/graph/badge.svg)](https://codecov.io/gh/stigsb/prometheus-cpp)
+
 A high-performance, header-only C++23 Prometheus client library.
 
 **Optimised for metric update throughput.** Values are stored as `int64_t` atomic integers, not `double`. On x86, `std::atomic<int64_t>::fetch_add` is a single `LOCK XADD` instruction — no CAS loop, no contention penalty. Double conversion happens only at scrape time.
