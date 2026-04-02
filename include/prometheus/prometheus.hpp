@@ -14,5 +14,6 @@
 #include <prometheus/detail/metric_store.hpp>
 #include <prometheus/text_serializer.hpp>
 #include <prometheus/metric_family.hpp>
+#include <prometheus/unit.hpp>
 #include <prometheus/metric_family_builder.hpp>
 #include <prometheus/registry.hpp>

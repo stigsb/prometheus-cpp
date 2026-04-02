@@ -2,6 +2,7 @@
 
 #include <prometheus/metric_family.hpp>
 #include <prometheus/label_mask.hpp>
+#include <prometheus/unit.hpp>
 #include <prometheus/detail/assert.hpp>
 #include <prometheus/detail/check_names.hpp>
 
@@ -95,6 +96,11 @@ public:
 
     auto& scale(double s) {
         scale_ = s;
+        return *this;
+    }
+
+    auto& unit(const Unit& u) {
+        scale_ = u.scale;
         return *this;
     }
 

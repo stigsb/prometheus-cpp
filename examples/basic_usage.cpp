@@ -23,16 +23,18 @@ int main() {
 
     // Dynamic histogram (backward compat): runtime bucket count, heap-allocated
     auto& latency_dyn = registry.histogram<AppLabels>(
-            "http_request_duration_us", "Request latency in microseconds (dynamic)")
+            "http_request_duration_seconds", "Request latency (dynamic)")
         .required(AppLabels::Key::service, AppLabels::Key::method)
-        .buckets(/*min=*/100, /*count=*/10)  // 100, 200, 400, 800 ... µs
+        .unit(prometheus::units::microseconds)
+        .buckets(/*min=*/100, /*count=*/10)  // 100, 200, 400, 800 ... µs → scaled to seconds
         .build();
 
     // Static histogram (recommended): compile-time bucket count, zero heap allocation
     auto& latency_static = registry.histogram<AppLabels, 8>(
-            "http_request_duration2_us", "Request latency in microseconds (static)")
+            "http_request_duration2_seconds", "Request latency (static)")
         .required(AppLabels::Key::service, AppLabels::Key::method)
-        .bounds(prometheus::make_bounds<8>(100))  // 100, 200, 400, 800 ... µs
+        .unit(prometheus::units::microseconds)
+        .bounds(prometheus::make_bounds<8>(100))  // 100, 200, 400, 800 ... µs → scaled to seconds
         .build();
 
     auto& active = registry.gauge<AppLabels>(
