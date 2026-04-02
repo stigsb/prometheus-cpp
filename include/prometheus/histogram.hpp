@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <climits>
+#include <prometheus/detail/cache_line.hpp>
 #include <span>
 #include <vector>
 #include <algorithm>
@@ -90,7 +91,9 @@ public:
 private:
     std::vector<int64_t> upper_bounds_;
     std::vector<std::atomic<int64_t>> bucket_counts_;
-    std::atomic<int64_t> sum_{0};
+    // Separate cache line from bucket_counts_ to avoid false sharing
+    // when observe() writes to both a bucket and the sum
+    alignas(detail::cache_line_size) std::atomic<int64_t> sum_{0};
 };
 
 } // namespace prometheus

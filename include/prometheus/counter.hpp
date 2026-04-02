@@ -3,10 +3,11 @@
 #include <atomic>
 #include <cstdint>
 #include <prometheus/detail/assert.hpp>
+#include <prometheus/detail/cache_line.hpp>
 
 namespace prometheus {
 
-class Counter {
+class alignas(detail::cache_line_size) Counter {
 public:
     void inc(int64_t delta = 1) noexcept {
         PROMETHEUS_ASSERT(delta >= 0);

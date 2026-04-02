@@ -3,10 +3,11 @@
 #include <atomic>
 #include <chrono>
 #include <cstdint>
+#include <prometheus/detail/cache_line.hpp>
 
 namespace prometheus {
 
-class Gauge {
+class alignas(detail::cache_line_size) Gauge {
 public:
     void set(int64_t v) noexcept {
         value_.store(v, std::memory_order_relaxed);
