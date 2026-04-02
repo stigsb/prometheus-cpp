@@ -24,6 +24,19 @@ if(PROMETHEUS_BUILD_BENCHMARKS)
   set(BENCHMARK_ENABLE_TESTING OFF CACHE BOOL "" FORCE)
   set(BENCHMARK_ENABLE_GTEST_TESTS OFF CACHE BOOL "" FORCE)
   FetchContent_MakeAvailable(googlebenchmark)
+
+  # jupp0r/prometheus-cpp for comparison benchmarks
+  FetchContent_Declare(
+    jupp0r_prometheus
+    GIT_REPOSITORY https://github.com/jupp0r/prometheus-cpp.git
+    GIT_TAG        v1.3.0
+    GIT_SHALLOW    TRUE
+  )
+  set(ENABLE_PUSH        OFF CACHE BOOL "" FORCE)
+  set(ENABLE_COMPRESSION OFF CACHE BOOL "" FORCE)
+  set(ENABLE_TESTING     OFF CACHE BOOL "" FORCE)
+  set(BUILD_SHARED_LIBS  OFF CACHE BOOL "" FORCE)
+  FetchContent_MakeAvailable(jupp0r_prometheus)
 endif()
 
 # ── cpp-httplib (examples only, optional) ─────────────────────────────────────
