@@ -148,3 +148,49 @@ TEST(TextSerializerTest, LabelValueBackslashEscaping) {
     // Each backslash must be escaped as \\
     EXPECT_NE(out.find("path\\\\to\\\\thing"), std::string::npos);
 }
+
+TEST(TextSerializerTest, EmptyHistogramSerialization) {
+    prometheus::Registry reg;
+    auto& fam = reg.histogram<SerLabels>("empty_hist", "Empty histogram")
+        .required(SerLabels::Key::service)
+        .buckets(100, 4)  // 100, 200, 400, +Inf
+        .build();
+
+    // Create the metric instance but don't observe anything
+    fam.get({.service = "api"});
+
+    auto out = reg.serialize();
+    // Should still produce valid output with zero counts
+    EXPECT_NE(out.find("# TYPE empty_hist histogram"), std::string::npos);
+    EXPECT_NE(out.find("empty_hist_bucket{"), std::string::npos);
+    EXPECT_NE(out.find("le=\"+Inf\""), std::string::npos);
+    EXPECT_NE(out.find("empty_hist_sum{"), std::string::npos);
+    EXPECT_NE(out.find("empty_hist_count{"), std::string::npos);
+    // All bucket counts should be 0
+    EXPECT_NE(out.find("} 0\n"), std::string::npos);
+}
+
+TEST(TextSerializerTest, EmptyCounterSerialization) {
+    prometheus::Registry reg;
+    auto& fam = reg.counter<SerLabels>("empty_counter", "Empty counter")
+        .required(SerLabels::Key::service)
+        .build();
+    fam.get({.service = "api"});  // create but don't increment
+
+    auto out = reg.serialize();
+    EXPECT_NE(out.find("# TYPE empty_counter counter"), std::string::npos);
+    EXPECT_NE(out.find("} 0\n"), std::string::npos);
+}
+
+TEST(TextSerializerTest, NoInstancesSerialization) {
+    // Family registered but no get() called — no instances to serialize
+    prometheus::Registry reg;
+    reg.counter<SerLabels>("no_instances", "No instances")
+        .required(SerLabels::Key::service)
+        .build();
+
+    auto out = reg.serialize();
+    // Should still produce HELP and TYPE lines even with no instances
+    EXPECT_NE(out.find("# HELP no_instances"), std::string::npos);
+    EXPECT_NE(out.find("# TYPE no_instances counter"), std::string::npos);
+}
