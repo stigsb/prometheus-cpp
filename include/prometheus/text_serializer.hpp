@@ -12,12 +12,21 @@ namespace prometheus {
 
 enum class MetricType { Counter, Gauge, Histogram };
 
+constexpr std::string_view metric_type_name(MetricType t) noexcept {
+    switch (t) {
+        case MetricType::Counter:   return "counter";
+        case MetricType::Gauge:     return "gauge";
+        case MetricType::Histogram: return "histogram";
+    }
+    return "untyped";
+}
+
 // Writes Prometheus text exposition format (version 0.0.4) to an ostream.
 class TextSerializer {
 public:
     explicit TextSerializer(std::ostream& out) : out_(out) {}
 
-    static std::string escape_help(std::string_view help) {
+    static constexpr std::string escape_help(std::string_view help) {
         std::string out;
         out.reserve(help.size());
         for (char c : help) {
@@ -32,13 +41,7 @@ public:
 
     void write_header(std::string_view name, std::string_view help, MetricType type) {
         out_ << "# HELP " << name << ' ' << escape_help(help) << '\n';
-        out_ << "# TYPE " << name << ' ';
-        switch (type) {
-            case MetricType::Counter:   out_ << "counter";   break;
-            case MetricType::Gauge:     out_ << "gauge";     break;
-            case MetricType::Histogram: out_ << "histogram"; break;
-        }
-        out_ << '\n';
+        out_ << "# TYPE " << name << ' ' << metric_type_name(type) << '\n';
     }
 
     // Write one sample line.

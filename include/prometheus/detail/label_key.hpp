@@ -6,7 +6,7 @@
 
 namespace prometheus::detail {
 
-inline std::string escape_label_value(std::string_view sv) {
+constexpr std::string escape_label_value(std::string_view sv) {
     std::string out;
     out.reserve(sv.size());
     for (char c : sv) {
