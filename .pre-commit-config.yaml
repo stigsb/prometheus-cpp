@@ -1,0 +1,30 @@
+# Pre-commit hooks for prometheus-cpp.
+#
+#   pip install pre-commit      # or: brew install pre-commit
+#   pre-commit install          # enable on every commit
+#   pre-commit run --all-files  # run across the whole tree
+#
+# clang-format runs from a pinned, self-contained mirror (no system install
+# needed). clang-tidy runs the system binary against the CMake compile
+# database; it is skipped gracefully if the project hasn't been configured
+# (see scripts/run-clang-tidy-precommit.sh).
+
+minimum_pre_commit_version: "3.0.0"
+
+repos:
+  - repo: https://github.com/pre-commit/mirrors-clang-format
+    rev: v22.1.8
+    hooks:
+      - id: clang-format
+        files: ^(include|tests|examples|bench)/.*\.(c|cc|cpp|cxx|h|hh|hpp|hxx)$
+
+  - repo: local
+    hooks:
+      - id: clang-tidy
+        name: clang-tidy
+        language: system
+        entry: bash scripts/run-clang-tidy-precommit.sh
+        # Only translation units; headers are covered transitively via the
+        # .clang-tidy HeaderFilterRegex when their including TU is checked.
+        files: ^(tests|examples|bench)/.*\.(c|cc|cpp|cxx)$
+        require_serial: true

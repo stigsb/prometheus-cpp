@@ -1,0 +1,66 @@
+# Derived from the existing prometheus-cpp source style.
+# Base: Google, with 4-space indent / 100-col / aligned-assignment overrides.
+---
+Language: Cpp
+BasedOnStyle: Google
+
+# Indentation
+IndentWidth: 4
+ContinuationIndentWidth: 4
+ConstructorInitializerIndentWidth: 4
+AccessModifierOffset: -4
+NamespaceIndentation: None
+TabWidth: 4
+UseTab: Never
+
+# Line width
+ColumnLimit: 100
+
+# Pointers / references bind to the type (int64_t& x, std::ostream& out)
+PointerAlignment: Left
+DerivePointerAlignment: false
+
+# Braces stay attached (K&R)
+BreakBeforeBraces: Attach
+
+# Constructor initializer lists: colon/comma lead the line
+BreakConstructorInitializers: BeforeComma
+PackConstructorInitializers: Never
+
+# Functions are written out across multiple lines, even when short.
+AllowShortFunctionsOnASingleLine: Empty
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLoopsOnASingleLine: false
+AllowShortBlocksOnASingleLine: Empty
+AllowShortCaseLabelsOnASingleLine: true
+AllowShortLambdasOnASingleLine: All
+
+# case X: return Y; rows are kept on one line and aligned.
+AlignConsecutiveShortCaseStatements:
+  Enabled: true
+  AcrossEmptyLines: false
+  AcrossComments: false
+  AlignCaseColons: false
+
+# Do not collapse hand-broken parameter/argument lists.
+BinPackParameters: false
+BinPackArguments: false
+
+# Aligned consecutive assignments are used intentionally throughout.
+AlignConsecutiveAssignments:
+  Enabled: true
+  AcrossEmptyLines: false
+  AcrossComments: false
+  AlignCompound: false
+  PadOperators: true
+
+# Includes are grouped by hand and not alphabetised.
+SortIncludes: Never
+IncludeBlocks: Preserve
+
+# Misc
+Standard: c++20
+SpacesBeforeTrailingComments: 1
+AlignAfterOpenBracket: Align
+AlwaysBreakTemplateDeclarations: Yes
+EmptyLineBeforeAccessModifier: LogicalBlock

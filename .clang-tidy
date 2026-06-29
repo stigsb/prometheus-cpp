@@ -1,0 +1,65 @@
+# clang-tidy configuration for prometheus-cpp.
+#
+# Strategy: enable broad, high-value check families and disable the specific
+# checks that the existing code does not currently satisfy, so the tree is
+# GREEN today and any *new* violation of a still-enabled check fails the build
+# (WarningsAsErrors below). The disabled-because-firing checks are grouped
+# separately from the disabled-by-design ones; the former are candidates to
+# fix-and-re-enable later, the latter conflict with deliberate design choices
+# (preprocessor label macros, #pragma once, int64_t atomics, terse hot-path
+# names) and should stay off.
+#
+# Run it:
+#   cmake -B build -DPROMETHEUS_BUILD_TESTS=ON -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+#   clang-tidy -p build <file.cpp>
+# On macOS, clang-tidy needs the SDK; the repo's lint wrappers add it for you
+# (scripts/run-clang-tidy-precommit.sh and .claude/hooks/lint-check.sh).
+---
+Checks: >
+  bugprone-*,
+  performance-*,
+  modernize-*,
+  readability-*,
+  portability-*,
+  clang-analyzer-*,
+
+  -bugprone-easily-swappable-parameters,
+  -modernize-use-trailing-return-type,
+  -modernize-macro-to-enum,
+  -modernize-use-designated-initializers,
+  -readability-identifier-length,
+  -readability-magic-numbers,
+  -readability-braces-around-statements,
+  -readability-implicit-bool-conversion,
+  -readability-function-cognitive-complexity,
+  -readability-math-missing-parentheses,
+  -misc-include-cleaner,
+  -misc-non-private-member-variables-in-classes,
+  -misc-use-anonymous-namespace,
+  -portability-avoid-pragma-once,
+
+  -bugprone-exception-escape,
+  -bugprone-implicit-widening-of-multiplication-result,
+  -readability-uppercase-literal-suffix,
+  -clang-diagnostic-unused-lambda-capture,
+  -clang-diagnostic-comment,
+  -bugprone-suspicious-include,
+  -bugprone-unused-local-non-trivial-variable,
+  -clang-analyzer-optin.core.EnumCastOutOfRange,
+  -clang-analyzer-optin.performance.Padding,
+  -modernize-avoid-c-arrays,
+  -modernize-return-braced-init-list,
+  -modernize-use-default-member-init,
+  -modernize-use-nodiscard,
+  -modernize-use-ranges,
+  -modernize-use-std-print,
+  -performance-enum-size,
+  -performance-faster-string-find,
+  -readability-container-contains,
+  -readability-inconsistent-ifelse-braces,
+  -readability-redundant-member-init,
+  -readability-redundant-typename,
+
+HeaderFilterRegex: 'prometheus/.*\.hpp$'
+WarningsAsErrors: '*'
+FormatStyle: file
