@@ -2,3 +2,8 @@ add_executable(basic_usage basic_usage.cpp)
 target_link_libraries(basic_usage PRIVATE prometheus::client)
 target_compile_features(basic_usage PRIVATE cxx_std_23)
 prometheus_set_warnings(basic_usage)
+
+add_executable(http_server_example http_server_example.cpp)
+target_link_libraries(http_server_example PRIVATE prometheus::client httplib::httplib)
+target_compile_features(http_server_example PRIVATE cxx_std_23)
+prometheus_set_warnings(http_server_example)
