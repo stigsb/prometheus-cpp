@@ -1,6 +1,6 @@
 ---
 name: prometheus-metrics
-description: Add, audit, and maintain Prometheus metrics using stigsb/prometheus-cpp. Use when: adding metrics to a C++ app, reviewing existing metric code, fixing Prometheus naming issues, adding histogram buckets, or wiring up a /metrics endpoint.
+description: "Add, audit, and maintain Prometheus metrics using stigsb/prometheus-cpp. Use when: adding metrics to a C++ app, reviewing existing metric code, fixing Prometheus naming issues, adding histogram buckets, or wiring up a /metrics endpoint."
 ---
 
 # prometheus-metrics skill
