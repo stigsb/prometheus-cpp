@@ -31,8 +31,8 @@ public:
 
     void set_to_current_time() noexcept {
         auto now = std::chrono::system_clock::now();
-        auto epoch = std::chrono::duration_cast<std::chrono::seconds>(
-            now.time_since_epoch()).count();
+        auto epoch =
+            std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch()).count();
         value_.store(static_cast<int64_t>(epoch), std::memory_order_relaxed);
     }
 

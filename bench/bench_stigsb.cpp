@@ -4,18 +4,17 @@
 
 // Define labels for comparison benchmarks
 PROMETHEUS_DEFINE_LABELS(CmpLabels,
-    (service, std::string),
-    (method,  std::string),
-    (code,    uint32_t)
-);
+                         (service, std::string),
+                         (method, std::string),
+                         (code, uint32_t));
 
 // 1. Single-threaded counter increment (hot path, handle pre-obtained)
 static void BM_Stigsb_CounterInc(benchmark::State& state) {
     prometheus::Registry reg;
     auto& fam = reg.counter<CmpLabels>("stigsb_counter", "bench")
-        .required(CmpLabels::Key::service, CmpLabels::Key::method)
-        .build();
-    auto& c = fam.get({.service = "api", .method = "GET"});
+                    .required(CmpLabels::Key::service, CmpLabels::Key::method)
+                    .build();
+    auto& c   = fam.get({.service = "api", .method = "GET"});
     for (auto _ : state) {
         c.inc();
     }
@@ -26,14 +25,14 @@ BENCHMARK(BM_Stigsb_CounterInc);
 // 2. Multi-threaded counter increment
 static void BM_Stigsb_CounterInc_MT(benchmark::State& state) {
     static prometheus::Registry* reg = nullptr;
-    static prometheus::Counter* ctr = nullptr;
+    static prometheus::Counter* ctr  = nullptr;
 
     if (state.thread_index() == 0) {
-        reg = new prometheus::Registry();
+        reg       = new prometheus::Registry();
         auto& fam = reg->counter<CmpLabels>("stigsb_counter_mt", "bench")
-            .required(CmpLabels::Key::service, CmpLabels::Key::method)
-            .build();
-        ctr = &fam.get({.service = "api", .method = "GET"});
+                        .required(CmpLabels::Key::service, CmpLabels::Key::method)
+                        .build();
+        ctr       = &fam.get({.service = "api", .method = "GET"});
     }
 
     for (auto _ : state) {
@@ -52,10 +51,10 @@ BENCHMARK(BM_Stigsb_CounterInc_MT)->ThreadRange(1, 8)->UseRealTime();
 static void BM_Stigsb_HistogramObserve(benchmark::State& state) {
     prometheus::Registry reg;
     auto& fam = reg.histogram<CmpLabels>("stigsb_hist", "bench")
-        .required(CmpLabels::Key::service)
-        .buckets(1, 10)  // 1, 2, 4, ..., 512, +Inf
-        .build();
-    auto& h = fam.get({.service = "api"});
+                    .required(CmpLabels::Key::service)
+                    .buckets(1, 10) // 1, 2, 4, ..., 512, +Inf
+                    .build();
+    auto& h   = fam.get({.service = "api"});
     int64_t v = 0;
     for (auto _ : state) {
         h.observe(v % 600);
@@ -69,8 +68,8 @@ BENCHMARK(BM_Stigsb_HistogramObserve);
 static void BM_Stigsb_GetAndInc(benchmark::State& state) {
     prometheus::Registry reg;
     auto& fam = reg.counter<CmpLabels>("stigsb_get_inc", "bench")
-        .required(CmpLabels::Key::service, CmpLabels::Key::method)
-        .build();
+                    .required(CmpLabels::Key::service, CmpLabels::Key::method)
+                    .build();
     // Pre-create
     fam.get({.service = "api", .method = "GET"});
 
@@ -85,12 +84,12 @@ BENCHMARK(BM_Stigsb_GetAndInc);
 static void BM_Stigsb_Serialize(benchmark::State& state) {
     prometheus::Registry reg;
     auto& fam = reg.counter<CmpLabels>("stigsb_ser_counter", "bench")
-        .required(CmpLabels::Key::service, CmpLabels::Key::method, CmpLabels::Key::code)
-        .build();
-    fam.get({.service = "web", .method = "GET",  .code = 200u}).inc(100);
+                    .required(CmpLabels::Key::service, CmpLabels::Key::method, CmpLabels::Key::code)
+                    .build();
+    fam.get({.service = "web", .method = "GET", .code = 200u}).inc(100);
     fam.get({.service = "web", .method = "POST", .code = 200u}).inc(50);
-    fam.get({.service = "api", .method = "GET",  .code = 200u}).inc(200);
-    fam.get({.service = "api", .method = "GET",  .code = 500u}).inc(3);
+    fam.get({.service = "api", .method = "GET", .code = 200u}).inc(200);
+    fam.get({.service = "api", .method = "GET", .code = 500u}).inc(3);
 
     for (auto _ : state) {
         auto out = reg.serialize();

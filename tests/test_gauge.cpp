@@ -91,10 +91,12 @@ TEST(GaugeTest, ToDoubleNegative) {
 TEST(GaugeTest, SetToCurrentTime) {
     prometheus::Gauge g;
     auto before = std::chrono::duration_cast<std::chrono::seconds>(
-        std::chrono::system_clock::now().time_since_epoch()).count();
+                      std::chrono::system_clock::now().time_since_epoch())
+                      .count();
     g.set_to_current_time();
     auto after = std::chrono::duration_cast<std::chrono::seconds>(
-        std::chrono::system_clock::now().time_since_epoch()).count();
+                     std::chrono::system_clock::now().time_since_epoch())
+                     .count();
     EXPECT_GE(g.load(), before);
     EXPECT_LE(g.load(), after);
 }
@@ -107,7 +109,10 @@ TEST(GaugeTest, ConcurrentIncrements) {
     std::vector<std::jthread> workers;
     workers.reserve(kThreads);
     for (int i = 0; i < kThreads; ++i)
-        workers.emplace_back([&]{ for (int j = 0; j < kIters; ++j) g.inc(); });
+        workers.emplace_back([&] {
+            for (int j = 0; j < kIters; ++j)
+                g.inc();
+        });
     workers.clear();
 
     EXPECT_EQ(g.load(), static_cast<int64_t>(kThreads) * kIters);
@@ -122,9 +127,15 @@ TEST(GaugeTest, ConcurrentMixed) {
     std::vector<std::jthread> workers;
     workers.reserve(kHalf * 2);
     for (int i = 0; i < kHalf; ++i)
-        workers.emplace_back([&]{ for (int j = 0; j < kIters; ++j) g.inc(); });
+        workers.emplace_back([&] {
+            for (int j = 0; j < kIters; ++j)
+                g.inc();
+        });
     for (int i = 0; i < kHalf; ++i)
-        workers.emplace_back([&]{ for (int j = 0; j < kIters; ++j) g.dec(); });
+        workers.emplace_back([&] {
+            for (int j = 0; j < kIters; ++j)
+                g.dec();
+        });
     workers.clear();
 
     EXPECT_EQ(g.load(), 0);

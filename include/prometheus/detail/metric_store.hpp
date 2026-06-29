@@ -25,14 +25,13 @@ public:
     // make_display – callable() -> std::string  (only called on first insert)
     // factory      – callable() -> unique_ptr<MetricT>
     template <typename DisplayFn, typename Factory>
-    MetricT& get_or_create(std::size_t hash,
-                           DisplayFn&& make_display,
-                           Factory&& factory) {
+    MetricT& get_or_create(std::size_t hash, DisplayFn&& make_display, Factory&& factory) {
         // Fast path: shared lock, hash-only lookup — zero allocation
         {
             std::shared_lock lock(mutex_);
             auto it = instances_.find(hash);
-            if (it != instances_.end()) return *it->second.metric;
+            if (it != instances_.end())
+                return *it->second.metric;
         }
         // Slow path: exclusive lock + double-check + insert
         std::unique_lock lock(mutex_);

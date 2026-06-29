@@ -71,7 +71,10 @@ TEST(CounterTest, ConcurrentIncrements) {
     std::vector<std::jthread> workers;
     workers.reserve(kThreads);
     for (int i = 0; i < kThreads; ++i)
-        workers.emplace_back([&]{ for (int j = 0; j < kIters; ++j) c.inc(); });
+        workers.emplace_back([&] {
+            for (int j = 0; j < kIters; ++j)
+                c.inc();
+        });
     workers.clear(); // joins all jthreads
 
     EXPECT_EQ(c.load(), static_cast<int64_t>(kThreads) * kIters);
@@ -102,8 +105,9 @@ TEST(CounterTest, ConcurrentIncrementsByDelta) {
     std::vector<std::jthread> workers;
     workers.reserve(kThreads);
     for (int i = 0; i < kThreads; ++i)
-        workers.emplace_back([&]{
-            for (int j = 0; j < kIters; ++j) c.inc(kDelta);
+        workers.emplace_back([&] {
+            for (int j = 0; j < kIters; ++j)
+                c.inc(kDelta);
         });
     workers.clear();
 

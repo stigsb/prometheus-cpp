@@ -1,8 +1,8 @@
 #include <gtest/gtest.h>
 #include <prometheus/detail/check_names.hpp>
 
-using prometheus::detail::check_metric_name;
 using prometheus::detail::check_label_name;
+using prometheus::detail::check_metric_name;
 
 // Metric names
 TEST(CheckNamesTest, ValidMetricNames) {

@@ -1,21 +1,16 @@
 #include <gtest/gtest.h>
 #include <prometheus/prometheus.hpp>
 
-
-
 PROMETHEUS_DEFINE_LABELS(FamLabels,
-    (service, std::string_view),
-    (method,  std::string_view),
-    (code,    uint32_t)
-);
+                         (service, std::string_view),
+                         (method, std::string_view),
+                         (code, uint32_t));
 
 // --- Counter family basics ---
 
 TEST(MetricFamilyTest, GetReturnsMetric) {
     prometheus::Registry reg;
-    auto& fam = reg.counter<FamLabels>("reqs", "help")
-        .required(FamLabels::Key::service)
-        .build();
+    auto& fam = reg.counter<FamLabels>("reqs", "help").required(FamLabels::Key::service).build();
 
     auto& c = fam.get({.service = "api"});
     c.inc(10);
@@ -24,9 +19,7 @@ TEST(MetricFamilyTest, GetReturnsMetric) {
 
 TEST(MetricFamilyTest, SameLabelsSameRef) {
     prometheus::Registry reg;
-    auto& fam = reg.counter<FamLabels>("reqs", "help")
-        .required(FamLabels::Key::service)
-        .build();
+    auto& fam = reg.counter<FamLabels>("reqs", "help").required(FamLabels::Key::service).build();
 
     auto& c1 = fam.get({.service = "api"});
     auto& c2 = fam.get({.service = "api"});
@@ -35,9 +28,7 @@ TEST(MetricFamilyTest, SameLabelsSameRef) {
 
 TEST(MetricFamilyTest, DifferentLabelsDifferentRefs) {
     prometheus::Registry reg;
-    auto& fam = reg.counter<FamLabels>("reqs", "help")
-        .required(FamLabels::Key::service)
-        .build();
+    auto& fam = reg.counter<FamLabels>("reqs", "help").required(FamLabels::Key::service).build();
 
     auto& c1 = fam.get({.service = "api"});
     auto& c2 = fam.get({.service = "web"});
@@ -50,9 +41,9 @@ TEST(MetricFamilyTest, DifferentLabelsDifferentRefs) {
 TEST(MetricFamilyTest, OptionalLabelDistinguishesCombinations) {
     prometheus::Registry reg;
     auto& fam = reg.counter<FamLabels>("reqs", "help")
-        .required(FamLabels::Key::service)
-        .optional(FamLabels::Key::method)
-        .build();
+                    .required(FamLabels::Key::service)
+                    .optional(FamLabels::Key::method)
+                    .build();
 
     auto& c1 = fam.get({.service = "api", .method = "GET"});
     auto& c2 = fam.get({.service = "api", .method = "POST"});
@@ -63,9 +54,7 @@ TEST(MetricFamilyTest, OptionalLabelDistinguishesCombinations) {
 
 TEST(MetricFamilyTest, HandleStableAcrossCalls) {
     prometheus::Registry reg;
-    auto& fam = reg.counter<FamLabels>("reqs", "help")
-        .required(FamLabels::Key::service)
-        .build();
+    auto& fam = reg.counter<FamLabels>("reqs", "help").required(FamLabels::Key::service).build();
 
     auto& c = fam.get({.service = "api"});
     c.inc(1);
@@ -79,8 +68,8 @@ TEST(MetricFamilyTest, HandleStableAcrossCalls) {
 TEST(MetricFamilyTest, GaugeFamily) {
     prometheus::Registry reg;
     auto& fam = reg.gauge<FamLabels>("active", "Active connections")
-        .required(FamLabels::Key::service)
-        .build();
+                    .required(FamLabels::Key::service)
+                    .build();
 
     auto& g = fam.get({.service = "api"});
     g.set(42);
@@ -94,9 +83,9 @@ TEST(MetricFamilyTest, GaugeFamily) {
 TEST(MetricFamilyTest, HistogramFamilyWithBuckets) {
     prometheus::Registry reg;
     auto& fam = reg.histogram<FamLabels>("latency", "Latency us")
-        .required(FamLabels::Key::service)
-        .buckets(100, 4)
-        .build();
+                    .required(FamLabels::Key::service)
+                    .buckets(100, 4)
+                    .build();
 
     auto& h = fam.get({.service = "svc"});
     h.observe(50);
@@ -108,10 +97,10 @@ TEST(MetricFamilyTest, HistogramFamilyWithBuckets) {
 TEST(MetricFamilyTest, HistogramCustomBuckets) {
     prometheus::Registry reg;
     auto& fam = reg.histogram<FamLabels>("latency", "Latency")
-        .required(FamLabels::Key::service)
-        .buckets(std::vector<int64_t>{100, 250, 500})
-        .build();
-    auto& h = fam.get({.service = "svc"});
+                    .required(FamLabels::Key::service)
+                    .buckets(std::vector<int64_t>{100, 250, 500})
+                    .build();
+    auto& h   = fam.get({.service = "svc"});
     h.observe(150);
     EXPECT_EQ(h.num_buckets(), 4u); // 3 custom + +Inf
 }
@@ -121,28 +110,28 @@ TEST(MetricFamilyTest, HistogramCustomBuckets) {
 TEST(MetricFamilyTest, ConstLabelsInOutput) {
     prometheus::Registry reg;
     auto& fam = reg.counter<FamLabels>("total", "Total things")
-        .required(FamLabels::Key::service)
-        .const_label("env", "test")
-        .build();
+                    .required(FamLabels::Key::service)
+                    .const_label("env", "test")
+                    .build();
 
     fam.get({.service = "api"}).inc(5);
 
     const std::string out = reg.serialize();
-    EXPECT_NE(out.find("env=\"test\""),    std::string::npos);
+    EXPECT_NE(out.find("env=\"test\""), std::string::npos);
     EXPECT_NE(out.find("service=\"api\""), std::string::npos);
 }
 
 TEST(MetricFamilyTest, MultipleConstLabels) {
     prometheus::Registry reg;
     auto& fam = reg.counter<FamLabels>("c", "c")
-        .required(FamLabels::Key::service)
-        .const_label("env", "prod")
-        .const_label("version", "2.0")
-        .build();
+                    .required(FamLabels::Key::service)
+                    .const_label("env", "prod")
+                    .const_label("version", "2.0")
+                    .build();
 
     fam.get({.service = "api"}).inc(1);
     const std::string out = reg.serialize();
-    EXPECT_NE(out.find("env=\"prod\""),    std::string::npos);
+    EXPECT_NE(out.find("env=\"prod\""), std::string::npos);
     EXPECT_NE(out.find("version=\"2.0\""), std::string::npos);
 }
 
@@ -151,16 +140,15 @@ TEST(MetricFamilyTest, MultipleConstLabels) {
 TEST(MetricFamilyTest, HelpAccessor) {
     prometheus::Registry reg;
     auto& fam = reg.counter<FamLabels>("test_help_ctr", "My help text")
-        .required(FamLabels::Key::service)
-        .build();
+                    .required(FamLabels::Key::service)
+                    .build();
     EXPECT_EQ(fam.help(), "My help text");
 }
 
 TEST(MetricFamilyTest, NameAccessor) {
     prometheus::Registry reg;
-    auto& fam = reg.counter<FamLabels>("test_name_ctr", "help")
-        .required(FamLabels::Key::service)
-        .build();
+    auto& fam =
+        reg.counter<FamLabels>("test_name_ctr", "help").required(FamLabels::Key::service).build();
     EXPECT_EQ(fam.name(), "test_name_ctr");
 }
 
@@ -170,17 +158,13 @@ TEST(MetricFamilyTest, NameAccessor) {
 
 TEST(MetricFamilyTest, RequiredLabelMissingAborts) {
     prometheus::Registry reg;
-    auto& fam = reg.counter<FamLabels>("reqs", "help")
-        .required(FamLabels::Key::service)
-        .build();
+    auto& fam = reg.counter<FamLabels>("reqs", "help").required(FamLabels::Key::service).build();
     EXPECT_DEATH(fam.get({}), "assertion failed");
 }
 
 TEST(MetricFamilyTest, ForbiddenLabelAborts) {
     prometheus::Registry reg;
-    auto& fam = reg.counter<FamLabels>("reqs", "help")
-        .required(FamLabels::Key::service)
-        .build();
+    auto& fam = reg.counter<FamLabels>("reqs", "help").required(FamLabels::Key::service).build();
     // method is not required or optional -> forbidden
     EXPECT_DEATH(fam.get({.service = "api", .method = "GET"}), "assertion failed");
 }

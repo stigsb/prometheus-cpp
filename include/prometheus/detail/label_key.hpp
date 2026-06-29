@@ -13,8 +13,8 @@ constexpr std::string escape_label_value(std::string_view sv) {
         switch (c) {
             case '\\': out += "\\\\"; break;
             case '"':  out += "\\\""; break;
-            case '\n': out += "\\n";  break;
-            default:   out += c;      break;
+            case '\n': out += "\\n"; break;
+            default:   out += c; break;
         }
     }
     return out;
@@ -28,7 +28,8 @@ std::string make_label_display(const typename LabelTraits::LabelSet& ls,
     for (auto k : LabelTraits::all_keys()) {
         auto bit = static_cast<uint64_t>(k);
         if ((allowed_mask & bit) && (LabelTraits::populated_mask(ls) & bit)) {
-            if (!result.empty()) result += ',';
+            if (!result.empty())
+                result += ',';
             result += LabelTraits::key_name(k);
             result += "=\"";
             result += escape_label_value(LabelTraits::format_value(k, ls));

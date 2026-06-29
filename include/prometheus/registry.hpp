@@ -24,35 +24,32 @@ public:
     // --- Builder entry points ---
 
     template <typename LabelTraits>
-    MetricFamilyBuilder<LabelTraits, Counter>
-    counter(std::string name, std::string help) {
+    MetricFamilyBuilder<LabelTraits, Counter> counter(std::string name, std::string help) {
         return {std::move(name), std::move(help), *this};
     }
 
     template <typename LabelTraits>
-    MetricFamilyBuilder<LabelTraits, Gauge>
-    gauge(std::string name, std::string help) {
+    MetricFamilyBuilder<LabelTraits, Gauge> gauge(std::string name, std::string help) {
         return {std::move(name), std::move(help), *this};
     }
 
     template <typename LabelTraits>
-    MetricFamilyBuilder<LabelTraits, Histogram>
-    histogram(std::string name, std::string help) {
+    MetricFamilyBuilder<LabelTraits, Histogram> histogram(std::string name, std::string help) {
         return {std::move(name), std::move(help), *this};
     }
 
     // Called by MetricFamilyBuilder::build().
     // Takes ownership of the family and returns a stable reference.
     template <typename LabelTraits, typename MetricT>
-    MetricFamily<LabelTraits, MetricT>&
-    register_family(std::unique_ptr<MetricFamily<LabelTraits, MetricT>> family) {
+    MetricFamily<LabelTraits, MetricT>& register_family(
+        std::unique_ptr<MetricFamily<LabelTraits, MetricT>> family) {
         auto& ref = *family;
         std::unique_lock lock(mutex_);
-        auto [it, inserted] = registered_names_.try_emplace(
-            std::string(family->name()), family->type());
+        auto [it, inserted] =
+            registered_names_.try_emplace(std::string(family->name()), family->type());
         if (!inserted) {
-            PROMETHEUS_ASSERT(it->second == family->type()
-                && "metric family registered with conflicting type");
+            PROMETHEUS_ASSERT(it->second == family->type() &&
+                              "metric family registered with conflicting type");
             PROMETHEUS_ASSERT(false && "duplicate metric family name");
         }
         families_.push_back(std::move(family));
@@ -84,16 +81,14 @@ private:
 // --- MetricFamilyBuilder::build() --- defined here so Registry is complete ---
 
 template <typename LabelTraits, typename MetricT>
-MetricFamily<LabelTraits, MetricT>&
-MetricFamilyBuilder<LabelTraits, MetricT>::build() {
-    auto family = std::make_unique<MetricFamily<LabelTraits, MetricT>>(
-        std::move(name_),
-        std::move(help_),
-        required_mask_,
-        optional_mask_,
-        std::move(const_labels_),
-        scale_,
-        std::move(factory_));
+MetricFamily<LabelTraits, MetricT>& MetricFamilyBuilder<LabelTraits, MetricT>::build() {
+    auto family = std::make_unique<MetricFamily<LabelTraits, MetricT>>(std::move(name_),
+                                                                       std::move(help_),
+                                                                       required_mask_,
+                                                                       optional_mask_,
+                                                                       std::move(const_labels_),
+                                                                       scale_,
+                                                                       std::move(factory_));
     return registry_.register_family(std::move(family));
 }
 
