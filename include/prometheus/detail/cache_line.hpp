@@ -1,18 +1,24 @@
 #pragma once
 
 #include <cstddef>
-#include <new> // std::hardware_destructive_interference_size
 
 namespace prometheus::detail {
 
 // Cache line size for avoiding false sharing.
-// std::hardware_destructive_interference_size is the standard way (C++17)
-// but some implementations don't provide it or warn about ABI instability.
-// Fall back to 64, which is correct for x86-64, ARM64, and POWER.
-#if defined(__cpp_lib_hardware_interference_size) && __cpp_lib_hardware_interference_size >= 201703L
-inline constexpr std::size_t cache_line_size = std::hardware_destructive_interference_size;
-#else
+//
+// Deliberately hard-coded to 64 rather than using
+// std::hardware_destructive_interference_size:
+//   - 64 is the destructive-interference size on x86-64, ARM64 and POWER, the
+//     targets this library supports;
+//   - the standard constant is not provided by every standard library and warns
+//     about ABI instability on some; and
+//   - on libstdc++/aarch64 it evaluates to 256, which over-pads the per-counter
+//     and per-histogram-bucket structures, bloating the working set and
+//     measurably slowing multithreaded workloads.
+// Hard-coding it also removes an include-order hazard: whether the standard
+// constant was visible depended on whether <new>/<version> had been included by
+// the time this header was processed, so the value could silently differ
+// between translation units.
 inline constexpr std::size_t cache_line_size = 64;
-#endif
 
 } // namespace prometheus::detail
