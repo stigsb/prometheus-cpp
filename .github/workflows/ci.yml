@@ -9,6 +9,7 @@ on:
 permissions:
   contents: write
   deployments: write
+  pull-requests: write # github-action-benchmark posts comment-on-alert on PRs
 
 jobs:
   build:
@@ -188,13 +189,24 @@ jobs:
           comment-on-alert: true
           fail-on-alert: false
 
+      # The PR gate compares against the mean/median means only. Google
+      # Benchmark also emits per-benchmark _stddev and _cv aggregates, which
+      # measure run-to-run noise on a shared CI runner, not performance — they
+      # routinely swing >15% and would fail every PR. Drop them before compare.
+      - name: Strip noise aggregates for PR comparison
+        if: github.event_name == 'pull_request'
+        run: |
+          jq '.benchmarks |= map(select((.aggregate_name // "") as $a
+                | $a != "stddev" and $a != "cv"))' \
+            bench_results.json > bench_results_pr.json
+
       - name: Compare benchmarks (PR)
         if: github.event_name == 'pull_request'
         uses: benchmark-action/github-action-benchmark@v1
         with:
           name: "Benchmarks (${{ matrix.arch }})"
           tool: googlecpp
-          output-file-path: bench_results.json
+          output-file-path: bench_results_pr.json
           github-token: ${{ secrets.GITHUB_TOKEN }}
           auto-push: false
           gh-pages-branch: gh-pages
