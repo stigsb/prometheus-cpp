@@ -189,15 +189,20 @@ jobs:
           comment-on-alert: true
           fail-on-alert: false
 
-      # The PR gate compares against the mean/median means only. Google
-      # Benchmark also emits per-benchmark _stddev and _cv aggregates, which
-      # measure run-to-run noise on a shared CI runner, not performance — they
-      # routinely swing >15% and would fail every PR. Drop them before compare.
-      - name: Strip noise aggregates for PR comparison
+      # The PR gate only compares the stable single-threaded means. Two classes
+      # of data point are dropped first because they are noise on a shared CI
+      # runner, not performance, and routinely swing >15%:
+      #   - the per-benchmark _stddev / _cv aggregates (run-to-run dispersion);
+      #   - the multithreaded (_MT/) benchmarks, whose means depend on thread
+      #     scheduling and vary 1.2-1.35x between runs of identical code.
+      # Main-branch tracking (the Store step) still records the full set for
+      # history; only the PR pass/fail gate is narrowed.
+      - name: Reduce benchmarks to the stable PR gate set
         if: github.event_name == 'pull_request'
         run: |
-          jq '.benchmarks |= map(select((.aggregate_name // "") as $a
-                | $a != "stddev" and $a != "cv"))' \
+          jq '.benchmarks |= map(select(
+                ((.aggregate_name // "") as $a | $a != "stddev" and $a != "cv")
+                and (.name | contains("_MT/") | not)))' \
             bench_results.json > bench_results_pr.json
 
       - name: Compare benchmarks (PR)
