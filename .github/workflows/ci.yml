@@ -9,6 +9,7 @@ on:
 permissions:
   contents: write
   deployments: write
+  pull-requests: write # github-action-benchmark posts comment-on-alert on PRs
 
 jobs:
   build:
@@ -188,13 +189,29 @@ jobs:
           comment-on-alert: true
           fail-on-alert: false
 
+      # The PR gate only compares the stable single-threaded means. Two classes
+      # of data point are dropped first because they are noise on a shared CI
+      # runner, not performance, and routinely swing >15%:
+      #   - the per-benchmark _stddev / _cv aggregates (run-to-run dispersion);
+      #   - the multithreaded (_MT/) benchmarks, whose means depend on thread
+      #     scheduling and vary 1.2-1.35x between runs of identical code.
+      # Main-branch tracking (the Store step) still records the full set for
+      # history; only the PR pass/fail gate is narrowed.
+      - name: Reduce benchmarks to the stable PR gate set
+        if: github.event_name == 'pull_request'
+        run: |
+          jq '.benchmarks |= map(select(
+                ((.aggregate_name // "") as $a | $a != "stddev" and $a != "cv")
+                and (.name | contains("_MT/") | not)))' \
+            bench_results.json > bench_results_pr.json
+
       - name: Compare benchmarks (PR)
         if: github.event_name == 'pull_request'
         uses: benchmark-action/github-action-benchmark@v1
         with:
           name: "Benchmarks (${{ matrix.arch }})"
           tool: googlecpp
-          output-file-path: bench_results.json
+          output-file-path: bench_results_pr.json
           github-token: ${{ secrets.GITHUB_TOKEN }}
           auto-push: false
           gh-pages-branch: gh-pages

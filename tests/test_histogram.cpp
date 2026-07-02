@@ -133,7 +133,10 @@ TEST(HistogramTest, ConcurrentObserveSameBucket) {
     std::vector<std::jthread> workers;
     workers.reserve(kThreads);
     for (int i = 0; i < kThreads; ++i)
-        workers.emplace_back([&]{ for (int j = 0; j < kIters; ++j) h.observe(50); });
+        workers.emplace_back([&] {
+            for (int j = 0; j < kIters; ++j)
+                h.observe(50);
+        });
     workers.clear(); // join
 
     EXPECT_EQ(h.total_count(), static_cast<int64_t>(kThreads) * kIters);
@@ -184,8 +187,9 @@ TEST(HistogramTest, ConcurrentObserveDifferentBuckets) {
     workers.reserve(kThreads);
     for (int i = 0; i < kThreads; ++i) {
         int64_t val = (i % 2 == 0) ? 50 : 150; // alternates bucket 0 and 1
-        workers.emplace_back([&h, val, kIters]{
-            for (int j = 0; j < kIters; ++j) h.observe(val);
+        workers.emplace_back([&h, val, kIters] {
+            for (int j = 0; j < kIters; ++j)
+                h.observe(val);
         });
     }
     workers.clear();
@@ -200,9 +204,9 @@ TEST(LocalHistogramTest, BasicAccumulate) {
     LocalHistogram local(hist);
 
     // Accumulate locally (no atomics)
-    local.observe(50);   // bucket 0
-    local.observe(150);  // bucket 1
-    local.observe(500);  // bucket 3 (+Inf)
+    local.observe(50);  // bucket 0
+    local.observe(150); // bucket 1
+    local.observe(500); // bucket 3 (+Inf)
 
     // Not yet merged — histogram should be empty
     EXPECT_EQ(hist.total_count(), 0);
@@ -257,7 +261,7 @@ TEST(LocalHistogramTest, Reset) {
 
     local.observe(50);
     local.observe(150);
-    local.reset();  // discard without merging
+    local.reset(); // discard without merging
     local.merge_into(hist);
 
     EXPECT_EQ(hist.total_count(), 0);
@@ -268,7 +272,7 @@ TEST(LocalHistogramTest, ConcurrentLocalMerge) {
     // Each thread has its own LocalHistogram, merges into shared Histogram
     Histogram hist(Histogram::make_bounds(100, 4));
 
-    constexpr int kThreads = 8;
+    constexpr int kThreads   = 8;
     constexpr int kBatchSize = 100'000;
 
     std::vector<std::jthread> workers;

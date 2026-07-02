@@ -11,10 +11,8 @@
 // 1. Single-threaded counter increment (hot path, handle pre-obtained)
 static void BM_Jupp0r_CounterInc(benchmark::State& state) {
     auto registry = std::make_shared<prometheus::Registry>();
-    auto& family = prometheus::BuildCounter()
-        .Name("jupp0r_counter")
-        .Help("bench")
-        .Register(*registry);
+    auto& family =
+        prometheus::BuildCounter().Name("jupp0r_counter").Help("bench").Register(*registry);
     auto& counter = family.Add({{"service", "api"}, {"method", "GET"}});
 
     for (auto _ : state) {
@@ -31,10 +29,8 @@ static void BM_Jupp0r_CounterInc_MT(benchmark::State& state) {
 
     if (state.thread_index() == 0) {
         registry = std::make_shared<prometheus::Registry>();
-        auto& family = prometheus::BuildCounter()
-            .Name("jupp0r_counter_mt")
-            .Help("bench")
-            .Register(*registry);
+        auto& family =
+            prometheus::BuildCounter().Name("jupp0r_counter_mt").Help("bench").Register(*registry);
         ctr = &family.Add({{"service", "api"}, {"method", "GET"}});
     }
 
@@ -53,13 +49,12 @@ BENCHMARK(BM_Jupp0r_CounterInc_MT)->ThreadRange(1, 8)->UseRealTime();
 // 3. Single-threaded histogram observe
 static void BM_Jupp0r_HistogramObserve(benchmark::State& state) {
     auto registry = std::make_shared<prometheus::Registry>();
-    auto& family = prometheus::BuildHistogram()
-        .Name("jupp0r_hist")
-        .Help("bench")
-        .Register(*registry);
+    auto& family =
+        prometheus::BuildHistogram().Name("jupp0r_hist").Help("bench").Register(*registry);
     // Equivalent bucket boundaries: 1, 2, 4, 8, ..., 512 (10 buckets)
-    auto& hist = family.Add({{"service", "api"}},
-        prometheus::Histogram::BucketBoundaries{1, 2, 4, 8, 16, 32, 64, 128, 256, 512});
+    auto& hist =
+        family.Add({{"service", "api"}},
+                   prometheus::Histogram::BucketBoundaries{1, 2, 4, 8, 16, 32, 64, 128, 256, 512});
 
     double v = 0;
     for (auto _ : state) {
@@ -73,10 +68,8 @@ BENCHMARK(BM_Jupp0r_HistogramObserve);
 // 4. Add(labels) + Increment() combined (map lookup + atomic)
 static void BM_Jupp0r_AddAndInc(benchmark::State& state) {
     auto registry = std::make_shared<prometheus::Registry>();
-    auto& family = prometheus::BuildCounter()
-        .Name("jupp0r_add_inc")
-        .Help("bench")
-        .Register(*registry);
+    auto& family =
+        prometheus::BuildCounter().Name("jupp0r_add_inc").Help("bench").Register(*registry);
     // Pre-create
     family.Add({{"service", "api"}, {"method", "GET"}});
 
@@ -90,20 +83,18 @@ BENCHMARK(BM_Jupp0r_AddAndInc);
 // 5. Serialize (1 counter family, 4 label combos)
 static void BM_Jupp0r_Serialize(benchmark::State& state) {
     auto registry = std::make_shared<prometheus::Registry>();
-    auto& family = prometheus::BuildCounter()
-        .Name("jupp0r_ser_counter")
-        .Help("bench")
-        .Register(*registry);
-    family.Add({{"service", "web"}, {"method", "GET"},  {"code", "200"}}).Increment(100);
+    auto& family =
+        prometheus::BuildCounter().Name("jupp0r_ser_counter").Help("bench").Register(*registry);
+    family.Add({{"service", "web"}, {"method", "GET"}, {"code", "200"}}).Increment(100);
     family.Add({{"service", "web"}, {"method", "POST"}, {"code", "200"}}).Increment(50);
-    family.Add({{"service", "api"}, {"method", "GET"},  {"code", "200"}}).Increment(200);
-    family.Add({{"service", "api"}, {"method", "GET"},  {"code", "500"}}).Increment(3);
+    family.Add({{"service", "api"}, {"method", "GET"}, {"code", "200"}}).Increment(200);
+    family.Add({{"service", "api"}, {"method", "GET"}, {"code", "500"}}).Increment(3);
 
     prometheus::TextSerializer serializer;
 
     for (auto _ : state) {
         auto collected = registry->Collect();
-        auto out = serializer.Serialize(collected);
+        auto out       = serializer.Serialize(collected);
         benchmark::DoNotOptimize(out);
     }
     state.SetItemsProcessed(state.iterations());

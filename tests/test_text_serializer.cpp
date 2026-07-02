@@ -3,16 +3,13 @@
 #include <sstream>
 #include <string>
 
-PROMETHEUS_DEFINE_LABELS(SerLabels,
-    (service, std::string_view),
-    (method,  std::string_view)
-);
+PROMETHEUS_DEFINE_LABELS(SerLabels, (service, std::string_view), (method, std::string_view));
 
 TEST(TextSerializerTest, CounterFormat) {
     prometheus::Registry reg;
     auto& fam = reg.counter<SerLabels>("http_requests_total", "Total HTTP requests")
-        .required(SerLabels::Key::service, SerLabels::Key::method)
-        .build();
+                    .required(SerLabels::Key::service, SerLabels::Key::method)
+                    .build();
 
     fam.get({.service = "api", .method = "GET"}).inc(42);
 
@@ -26,8 +23,8 @@ TEST(TextSerializerTest, CounterFormat) {
 TEST(TextSerializerTest, GaugeFormat) {
     prometheus::Registry reg;
     auto& fam = reg.gauge<SerLabels>("active_connections", "Open connections")
-        .required(SerLabels::Key::service)
-        .build();
+                    .required(SerLabels::Key::service)
+                    .build();
 
     fam.get({.service = "api"}).set(37);
 
@@ -39,14 +36,14 @@ TEST(TextSerializerTest, GaugeFormat) {
 TEST(TextSerializerTest, HistogramFormat) {
     prometheus::Registry reg;
     auto& fam = reg.histogram<SerLabels>("latency_us", "Request latency")
-        .required(SerLabels::Key::service)
-        .buckets(100, 4)  // 100, 200, 400, +Inf
-        .build();
+                    .required(SerLabels::Key::service)
+                    .buckets(100, 4) // 100, 200, 400, +Inf
+                    .build();
 
     auto& h = fam.get({.service = "api"});
-    h.observe(50);   // bucket 0 (le=100)
-    h.observe(150);  // bucket 1 (le=200)
-    h.observe(500);  // bucket 3 (+Inf)
+    h.observe(50);  // bucket 0 (le=100)
+    h.observe(150); // bucket 1 (le=200)
+    h.observe(500); // bucket 3 (+Inf)
 
     auto out = reg.serialize();
     EXPECT_NE(out.find("# TYPE latency_us histogram"), std::string::npos);
@@ -59,9 +56,9 @@ TEST(TextSerializerTest, HistogramFormat) {
 TEST(TextSerializerTest, ConstLabels) {
     prometheus::Registry reg;
     auto& fam = reg.counter<SerLabels>("req_total", "Requests")
-        .required(SerLabels::Key::service)
-        .const_label("env", "prod")
-        .build();
+                    .required(SerLabels::Key::service)
+                    .const_label("env", "prod")
+                    .build();
 
     fam.get({.service = "api"}).inc(10);
 
@@ -72,10 +69,10 @@ TEST(TextSerializerTest, ConstLabels) {
 TEST(TextSerializerTest, ScaleFactor) {
     prometheus::Registry reg;
     auto& fam = reg.histogram<SerLabels>("latency_s", "Request latency in seconds")
-        .required(SerLabels::Key::service)
-        .buckets(1000, 3)  // 1000, 2000, +Inf (microseconds)
-        .scale(1e-6)       // display as seconds
-        .build();
+                    .required(SerLabels::Key::service)
+                    .buckets(1000, 3) // 1000, 2000, +Inf (microseconds)
+                    .scale(1e-6)      // display as seconds
+                    .build();
 
     auto& h = fam.get({.service = "api"});
     h.observe(500);
@@ -90,12 +87,9 @@ TEST(TextSerializerTest, ScaleFactor) {
 
 TEST(TextSerializerTest, MultipleFamilies) {
     prometheus::Registry reg;
-    auto& c = reg.counter<SerLabels>("counter_a", "Counter A")
-        .required(SerLabels::Key::service)
-        .build();
-    auto& g = reg.gauge<SerLabels>("gauge_b", "Gauge B")
-        .required(SerLabels::Key::service)
-        .build();
+    auto& c =
+        reg.counter<SerLabels>("counter_a", "Counter A").required(SerLabels::Key::service).build();
+    auto& g = reg.gauge<SerLabels>("gauge_b", "Gauge B").required(SerLabels::Key::service).build();
 
     c.get({.service = "svc"}).inc(5);
     g.get({.service = "svc"}).set(99);
@@ -110,12 +104,12 @@ TEST(TextSerializerTest, MultipleFamilies) {
 TEST(TextSerializerTest, FormatDouble) {
     EXPECT_EQ(prometheus::TextSerializer::format_double(42.0), "42");
     EXPECT_EQ(prometheus::TextSerializer::format_double(3.14), "3.14");
-    EXPECT_EQ(prometheus::TextSerializer::format_double(
-        std::numeric_limits<double>::infinity()), "+Inf");
-    EXPECT_EQ(prometheus::TextSerializer::format_double(
-        -std::numeric_limits<double>::infinity()), "-Inf");
-    EXPECT_EQ(prometheus::TextSerializer::format_double(
-        std::numeric_limits<double>::quiet_NaN()), "NaN");
+    EXPECT_EQ(prometheus::TextSerializer::format_double(std::numeric_limits<double>::infinity()),
+              "+Inf");
+    EXPECT_EQ(prometheus::TextSerializer::format_double(-std::numeric_limits<double>::infinity()),
+              "-Inf");
+    EXPECT_EQ(prometheus::TextSerializer::format_double(std::numeric_limits<double>::quiet_NaN()),
+              "NaN");
 }
 
 TEST(TextSerializerTest, FormatDoubleLocaleIndependent) {
@@ -128,8 +122,8 @@ TEST(TextSerializerTest, FormatDoubleLocaleIndependent) {
 TEST(TextSerializerTest, LabelValueEscaping) {
     prometheus::Registry reg;
     auto& fam = reg.counter<SerLabels>("escaped_metric", "Test escaping")
-        .required(SerLabels::Key::service)
-        .build();
+                    .required(SerLabels::Key::service)
+                    .build();
     fam.get({.service = "has\"quote"}).inc(1);
 
     auto out = reg.serialize();
@@ -140,8 +134,8 @@ TEST(TextSerializerTest, LabelValueEscaping) {
 TEST(TextSerializerTest, LabelValueBackslashEscaping) {
     prometheus::Registry reg;
     auto& fam = reg.counter<SerLabels>("bs_metric", "Test backslash")
-        .required(SerLabels::Key::service)
-        .build();
+                    .required(SerLabels::Key::service)
+                    .build();
     fam.get({.service = "path\\to\\thing"}).inc(1);
 
     auto out = reg.serialize();
@@ -152,9 +146,9 @@ TEST(TextSerializerTest, LabelValueBackslashEscaping) {
 TEST(TextSerializerTest, EmptyHistogramSerialization) {
     prometheus::Registry reg;
     auto& fam = reg.histogram<SerLabels>("empty_hist", "Empty histogram")
-        .required(SerLabels::Key::service)
-        .buckets(100, 4)  // 100, 200, 400, +Inf
-        .build();
+                    .required(SerLabels::Key::service)
+                    .buckets(100, 4) // 100, 200, 400, +Inf
+                    .build();
 
     // Create the metric instance but don't observe anything
     fam.get({.service = "api"});
@@ -173,9 +167,9 @@ TEST(TextSerializerTest, EmptyHistogramSerialization) {
 TEST(TextSerializerTest, EmptyCounterSerialization) {
     prometheus::Registry reg;
     auto& fam = reg.counter<SerLabels>("empty_counter", "Empty counter")
-        .required(SerLabels::Key::service)
-        .build();
-    fam.get({.service = "api"});  // create but don't increment
+                    .required(SerLabels::Key::service)
+                    .build();
+    fam.get({.service = "api"}); // create but don't increment
 
     auto out = reg.serialize();
     EXPECT_NE(out.find("# TYPE empty_counter counter"), std::string::npos);
@@ -197,10 +191,9 @@ TEST(TextSerializerTest, NoInstancesSerialization) {
 
 TEST(TextSerializerTest, GaugeZeroValue) {
     prometheus::Registry reg;
-    auto& fam = reg.gauge<SerLabels>("zero_gauge", "Zero gauge")
-        .required(SerLabels::Key::service)
-        .build();
-    fam.get({.service = "api"});  // default 0
+    auto& fam =
+        reg.gauge<SerLabels>("zero_gauge", "Zero gauge").required(SerLabels::Key::service).build();
+    fam.get({.service = "api"}); // default 0
     auto out = reg.serialize();
     EXPECT_NE(out.find("} 0\n"), std::string::npos);
 }
@@ -208,8 +201,8 @@ TEST(TextSerializerTest, GaugeZeroValue) {
 TEST(TextSerializerTest, GaugeNegativeValue) {
     prometheus::Registry reg;
     auto& fam = reg.gauge<SerLabels>("neg_gauge", "Negative gauge")
-        .required(SerLabels::Key::service)
-        .build();
+                    .required(SerLabels::Key::service)
+                    .build();
     fam.get({.service = "api"}).set(-42);
     auto out = reg.serialize();
     EXPECT_NE(out.find("-42"), std::string::npos);
@@ -218,22 +211,21 @@ TEST(TextSerializerTest, GaugeNegativeValue) {
 TEST(TextSerializerTest, GaugeLargeValue) {
     prometheus::Registry reg;
     auto& fam = reg.gauge<SerLabels>("large_gauge", "Large gauge")
-        .required(SerLabels::Key::service)
-        .build();
+                    .required(SerLabels::Key::service)
+                    .build();
     fam.get({.service = "api"}).set(1'000'000'000'000LL);
     auto out = reg.serialize();
     // to_chars may produce "1000000000000" or "1e+12" or "1e12"
-    bool found = out.find("1000000000000") != std::string::npos
-              || out.find("1e+12") != std::string::npos
-              || out.find("1e12") != std::string::npos;
+    bool found = out.find("1000000000000") != std::string::npos ||
+                 out.find("1e+12") != std::string::npos || out.find("1e12") != std::string::npos;
     EXPECT_TRUE(found) << "Output: " << out;
 }
 
 TEST(TextSerializerTest, LabelValueNewlineEscaping) {
     prometheus::Registry reg;
     auto& fam = reg.counter<SerLabels>("nl_metric", "Test newline")
-        .required(SerLabels::Key::service)
-        .build();
+                    .required(SerLabels::Key::service)
+                    .build();
     fam.get({.service = "api\nv2"}).inc(1);
 
     auto out = reg.serialize();
@@ -244,9 +236,7 @@ PROMETHEUS_DEFINE_LABELS(NoLabels, (dummy, std::string_view));
 
 TEST(TextSerializerTest, HistogramNoDynamicLabelsHasLeBucket) {
     prometheus::Registry reg;
-    auto& fam = reg.histogram<NoLabels>("no_dyn_hist", "No dynamic labels")
-        .buckets(100, 3)
-        .build();
+    auto& fam = reg.histogram<NoLabels>("no_dyn_hist", "No dynamic labels").buckets(100, 3).build();
 
     fam.get({}).observe(50);
 
@@ -259,8 +249,8 @@ TEST(TextSerializerTest, HistogramNoDynamicLabelsHasLeBucket) {
 TEST(TextSerializerTest, HelpTextEscaping) {
     prometheus::Registry reg;
     auto& fam = reg.counter<SerLabels>("help_escape", "Help with \\backslash and\nnewline")
-        .required(SerLabels::Key::service)
-        .build();
+                    .required(SerLabels::Key::service)
+                    .build();
     fam.get({.service = "api"}).inc(1);
     auto out = reg.serialize();
     // Backslash should be escaped, newline should be escaped

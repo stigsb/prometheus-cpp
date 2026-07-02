@@ -33,7 +33,8 @@ inline void hash_mix_byte(std::size_t& h, uint8_t b) noexcept {
 }
 
 inline void hash_label_field(std::size_t& h, std::string_view v) noexcept {
-    for (char c : v) hash_mix_byte(h, static_cast<uint8_t>(c));
+    for (char c : v)
+        hash_mix_byte(h, static_cast<uint8_t>(c));
 }
 
 inline void hash_label_field(std::size_t& h, const std::string& v) noexcept {
@@ -49,6 +50,10 @@ inline void hash_label_field(std::size_t& h, T v) noexcept {
 }
 
 } // namespace prometheus::detail
+
+// clang-format off
+// The preprocessor metaprogramming below is hand-aligned for readability;
+// clang-format would mangle the macro continuations, so it is left untouched.
 
 // ── Preprocessor helpers ────────────────────────────────────────────────────
 
@@ -266,3 +271,4 @@ struct Name {                                                                  \
         return h;                                                              \
     }                                                                          \
 }
+// clang-format on

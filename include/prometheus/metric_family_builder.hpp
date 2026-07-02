@@ -28,16 +28,13 @@ public:
     MetricFamilyBuilder(std::string name, std::string help, Registry& reg)
         : name_(std::move(name))
         , help_(std::move(help))
-        , registry_(reg)
-    {
+        , registry_(reg) {
         PROMETHEUS_ASSERT(detail::check_metric_name(name_));
         if constexpr (!std::is_same_v<MetricT, Histogram>) {
-            factory_ = []{ return std::make_unique<MetricT>(); };
+            factory_ = [] { return std::make_unique<MetricT>(); };
         } else {
             // Default: 8 power-of-two buckets starting at 100
-            factory_ = []{
-                return std::make_unique<Histogram>(Histogram::make_bounds(100, 8));
-            };
+            factory_ = [] { return std::make_unique<Histogram>(Histogram::make_bounds(100, 8)); };
         }
     }
 
@@ -63,7 +60,7 @@ public:
     auto& buckets(int64_t min, std::size_t count)
         requires std::same_as<MetricT, Histogram>
     {
-        factory_ = [min, count]{
+        factory_ = [min, count] {
             return std::make_unique<Histogram>(Histogram::make_bounds(min, count));
         };
         return *this;
@@ -73,10 +70,8 @@ public:
     auto& buckets(std::vector<int64_t> boundaries)
         requires std::same_as<MetricT, Histogram>
     {
-        auto b = Histogram::make_bounds(std::move(boundaries));
-        factory_ = [b = std::move(b)]{
-            return std::make_unique<Histogram>(b);
-        };
+        auto b   = Histogram::make_bounds(std::move(boundaries));
+        factory_ = [b = std::move(b)] { return std::make_unique<Histogram>(b); };
         return *this;
     }
 
@@ -98,11 +93,11 @@ public:
 private:
     std::string name_;
     std::string help_;
-    Registry&   registry_;
-    uint64_t    required_mask_{};
-    uint64_t    optional_mask_{};
-    std::vector<std::pair<std::string,std::string>> const_labels_;
-    double      scale_{1.0};
+    Registry& registry_;
+    uint64_t required_mask_{};
+    uint64_t optional_mask_{};
+    std::vector<std::pair<std::string, std::string>> const_labels_;
+    double scale_{1.0};
     std::function<std::unique_ptr<MetricT>()> factory_;
 };
 

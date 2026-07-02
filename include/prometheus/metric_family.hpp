@@ -24,11 +24,11 @@ namespace prometheus {
 // Type-erased interface implemented by every MetricFamily.
 class Collectable {
 public:
-    virtual ~Collectable() = default;
+    virtual ~Collectable()                          = default;
     virtual void collect(TextSerializer& out) const = 0;
-    virtual std::string_view name() const noexcept = 0;
-    virtual std::string_view help() const noexcept = 0;
-    virtual MetricType type() const noexcept = 0;
+    virtual std::string_view name() const noexcept  = 0;
+    virtual std::string_view help() const noexcept  = 0;
+    virtual MetricType type() const noexcept        = 0;
 };
 
 // A named, typed group of metric instances sharing HELP/TYPE but differing
@@ -40,7 +40,7 @@ public:
                  std::string help,
                  uint64_t required_mask,
                  uint64_t optional_mask,
-                 std::vector<std::pair<std::string,std::string>> const_labels,
+                 std::vector<std::pair<std::string, std::string>> const_labels,
                  double scale,
                  std::function<std::unique_ptr<MetricT>()> factory)
         : name_(std::move(name))
@@ -49,36 +49,39 @@ public:
         , optional_mask_(optional_mask)
         , const_labels_(std::move(const_labels))
         , scale_(scale)
-        , factory_(std::move(factory))
-    {}
+        , factory_(std::move(factory)) {}
 
     // Obtain (or create) the metric instance for the given label set.
     // In debug builds, asserts required labels are present and no
     // forbidden labels are supplied.
     MetricT& get(const typename LabelTraits::LabelSet& ls) {
-        const uint64_t allowed    = required_mask_ | optional_mask_;
-        const uint64_t populated  = LabelTraits::populated_mask(ls);
+        const uint64_t allowed   = required_mask_ | optional_mask_;
+        const uint64_t populated = LabelTraits::populated_mask(ls);
         PROMETHEUS_ASSERT((populated & required_mask_) == required_mask_);
         PROMETHEUS_ASSERT((populated & ~allowed) == 0u);
 
         const auto hash = detail::make_label_hash<LabelTraits>(ls, allowed);
 
         return store_.get_or_create(
-            hash,
-            [&]{ return detail::make_label_display<LabelTraits>(ls, allowed); },
-            factory_
-        );
+            hash, [&] { return detail::make_label_display<LabelTraits>(ls, allowed); }, factory_);
     }
 
     // --- Collectable interface ---
 
-    std::string_view name() const noexcept override { return name_; }
-    std::string_view help() const noexcept override { return help_; }
+    std::string_view name() const noexcept override {
+        return name_;
+    }
+    std::string_view help() const noexcept override {
+        return help_;
+    }
 
     MetricType type() const noexcept override {
-        if constexpr (std::is_same_v<MetricT, Counter>)    return MetricType::Counter;
-        else if constexpr (std::is_same_v<MetricT, Gauge>) return MetricType::Gauge;
-        else if constexpr (std::is_same_v<MetricT, Histogram>) return MetricType::Histogram;
+        if constexpr (std::is_same_v<MetricT, Counter>)
+            return MetricType::Counter;
+        else if constexpr (std::is_same_v<MetricT, Gauge>)
+            return MetricType::Gauge;
+        else if constexpr (std::is_same_v<MetricT, Histogram>)
+            return MetricType::Histogram;
         else {
             static_assert(sizeof(MetricT) == 0, "Unknown metric type");
             return MetricType::Counter; // unreachable
@@ -91,7 +94,7 @@ public:
         if constexpr (std::is_same_v<MetricT, Histogram>) {
             store_.for_each([&](const std::string& dyn, const MetricT& h) {
                 const std::size_t n = h.num_buckets();
-                int64_t cum = 0;
+                int64_t cum         = 0;
                 for (std::size_t i = 0; i < n; ++i) {
                     cum += h.bucket_count(i);
                     std::string le_val;
@@ -101,13 +104,17 @@ public:
                         le_val = TextSerializer::format_double(
                             static_cast<double>(h.upper_bound(i)) * scale_);
                     }
-                    ser.write_sample(name_ + "_bucket", dyn, const_labels_,
-                                     static_cast<double>(cum), "le", le_val);
+                    ser.write_sample(name_ + "_bucket",
+                                     dyn,
+                                     const_labels_,
+                                     static_cast<double>(cum),
+                                     "le",
+                                     le_val);
                 }
-                ser.write_sample(name_ + "_sum", dyn, const_labels_,
-                                 static_cast<double>(h.sum()) * scale_);
-                ser.write_sample(name_ + "_count", dyn, const_labels_,
-                                 static_cast<double>(h.total_count()));
+                ser.write_sample(
+                    name_ + "_sum", dyn, const_labels_, static_cast<double>(h.sum()) * scale_);
+                ser.write_sample(
+                    name_ + "_count", dyn, const_labels_, static_cast<double>(h.total_count()));
             });
         } else {
             store_.for_each([&](const std::string& dyn, const MetricT& m) {
@@ -123,7 +130,7 @@ private:
     std::string help_;
     uint64_t required_mask_{};
     uint64_t optional_mask_{};
-    std::vector<std::pair<std::string,std::string>> const_labels_;
+    std::vector<std::pair<std::string, std::string>> const_labels_;
     double scale_{1.0};
     std::function<std::unique_ptr<MetricT>()> factory_;
 

@@ -24,7 +24,8 @@ constexpr std::string_view metric_type_name(MetricType t) noexcept {
 // Writes Prometheus text exposition format (version 0.0.4) to an ostream.
 class TextSerializer {
 public:
-    explicit TextSerializer(std::ostream& out) : out_(out) {}
+    explicit TextSerializer(std::ostream& out)
+        : out_(out) {}
 
     static constexpr std::string escape_help(std::string_view help) {
         std::string out;
@@ -32,8 +33,8 @@ public:
         for (char c : help) {
             switch (c) {
                 case '\\': out += "\\\\"; break;
-                case '\n': out += "\\n";  break;
-                default:   out += c;      break;
+                case '\n': out += "\\n"; break;
+                default:   out += c; break;
             }
         }
         return out;
@@ -49,14 +50,12 @@ public:
     // const_labels: family-level fixed labels, appended after dynamic + extra
     void write_sample(std::string_view metric_name,
                       std::string_view dynamic_labels,
-                      const std::vector<std::pair<std::string,std::string>>& const_labels,
+                      const std::vector<std::pair<std::string, std::string>>& const_labels,
                       double value,
-                      std::string_view extra_label_name = {},
+                      std::string_view extra_label_name  = {},
                       std::string_view extra_label_value = {}) {
         out_ << metric_name;
-        bool any = !dynamic_labels.empty()
-                || !extra_label_name.empty()
-                || !const_labels.empty();
+        bool any = !dynamic_labels.empty() || !extra_label_name.empty() || !const_labels.empty();
         if (any) {
             out_ << '{';
             bool first = true;
@@ -65,12 +64,14 @@ public:
                 first = false;
             }
             if (!extra_label_name.empty()) {
-                if (!first) out_ << ',';
+                if (!first)
+                    out_ << ',';
                 out_ << extra_label_name << "=\"" << extra_label_value << '"';
                 first = false;
             }
             for (const auto& [k, v] : const_labels) {
-                if (!first) out_ << ',';
+                if (!first)
+                    out_ << ',';
                 out_ << k << "=\"" << v << '"';
                 first = false;
             }
@@ -79,13 +80,17 @@ public:
         out_ << ' ' << format_double(value) << '\n';
     }
 
-    void write_newline() { out_ << '\n'; }
+    void write_newline() {
+        out_ << '\n';
+    }
 
     // Compact floating-point formatting: integers without decimal point,
     // +Inf/-Inf/NaN handled, up to 15 significant digits otherwise.
     static std::string format_double(double v) {
-        if (std::isinf(v)) return v > 0.0 ? "+Inf" : "-Inf";
-        if (std::isnan(v)) return "NaN";
+        if (std::isinf(v))
+            return v > 0.0 ? "+Inf" : "-Inf";
+        if (std::isnan(v))
+            return "NaN";
         char buf[64];
         auto [ptr, ec] = std::to_chars(buf, buf + sizeof(buf), v);
         return std::string(buf, ptr);

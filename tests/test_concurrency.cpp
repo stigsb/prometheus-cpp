@@ -3,20 +3,17 @@
 #include <thread>
 #include <vector>
 
-PROMETHEUS_DEFINE_LABELS(ConcLabels,
-    (service, std::string_view),
-    (method,  std::string_view)
-);
+PROMETHEUS_DEFINE_LABELS(ConcLabels, (service, std::string_view), (method, std::string_view));
 
 TEST(ConcurrencyTest, ConcurrentGetAndInc) {
     // Multiple threads getting the same metric handle and incrementing
     prometheus::Registry reg;
     auto& fam = reg.counter<ConcLabels>("conc_counter", "Concurrent counter")
-        .required(ConcLabels::Key::service, ConcLabels::Key::method)
-        .build();
+                    .required(ConcLabels::Key::service, ConcLabels::Key::method)
+                    .build();
 
     constexpr int num_threads = 8;
-    constexpr int iters = 100'000;
+    constexpr int iters       = 100'000;
 
     std::vector<std::jthread> workers;
     workers.reserve(num_threads);
@@ -38,10 +35,10 @@ TEST(ConcurrencyTest, ConcurrentNewLabelCombinations) {
     // Multiple threads creating different label combinations simultaneously
     prometheus::Registry reg;
     auto& fam = reg.counter<ConcLabels>("conc_new_labels", "Concurrent label creation")
-        .required(ConcLabels::Key::service, ConcLabels::Key::method)
-        .build();
+                    .required(ConcLabels::Key::service, ConcLabels::Key::method)
+                    .build();
 
-    constexpr int num_threads = 8;
+    constexpr int num_threads       = 8;
     constexpr int combos_per_thread = 100;
 
     // Each thread creates unique label combos and increments each once
@@ -50,7 +47,7 @@ TEST(ConcurrencyTest, ConcurrentNewLabelCombinations) {
     for (int t = 0; t < num_threads; ++t) {
         workers.emplace_back([&, t] {
             for (int c = 0; c < combos_per_thread; ++c) {
-                auto svc = "svc_" + std::to_string(t);
+                auto svc    = "svc_" + std::to_string(t);
                 auto method = "m_" + std::to_string(c);
                 // string_view must outlive the call
                 fam.get({.service = svc, .method = method}).inc();
@@ -67,12 +64,12 @@ TEST(ConcurrencyTest, ConcurrentNewLabelCombinations) {
 TEST(ConcurrencyTest, ConcurrentHistogramObserve) {
     prometheus::Registry reg;
     auto& fam = reg.histogram<ConcLabels>("conc_hist", "Concurrent histogram")
-        .required(ConcLabels::Key::service)
-        .buckets(100, 6)
-        .build();
+                    .required(ConcLabels::Key::service)
+                    .buckets(100, 6)
+                    .build();
 
     constexpr int num_threads = 8;
-    constexpr int iters = 100'000;
+    constexpr int iters       = 100'000;
 
     std::vector<std::jthread> workers;
     workers.reserve(num_threads);

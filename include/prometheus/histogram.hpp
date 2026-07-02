@@ -16,14 +16,13 @@ class Histogram {
 public:
     explicit Histogram(std::vector<int64_t> upper_bounds)
         : upper_bounds_(std::move(upper_bounds))
-        , bucket_counts_(upper_bounds_.size())
-    {}
+        , bucket_counts_(upper_bounds_.size()) {}
 
     // Hot path: binary search + 2 atomic ops.
     // Since the last bound is always INT64_MAX and int64_t <= INT64_MAX,
     // lower_bound always finds a valid bucket — no end() check needed.
     void observe(int64_t value) noexcept {
-        auto it = std::lower_bound(upper_bounds_.begin(), upper_bounds_.end(), value);
+        auto it  = std::lower_bound(upper_bounds_.begin(), upper_bounds_.end(), value);
         auto idx = static_cast<std::size_t>(it - upper_bounds_.begin());
         bucket_counts_[idx].fetch_add(1, std::memory_order_relaxed);
         sum_.fetch_add(value, std::memory_order_relaxed);
@@ -112,12 +111,11 @@ public:
     explicit LocalHistogram(const Histogram& target)
         : upper_bounds_(target.bounds())
         , counts_(target.num_buckets(), 0)
-        , sum_{0}
-    {}
+        , sum_{0} {}
 
     // Hot path: pure local writes, no atomics, no cache line bouncing
     void observe(int64_t value) noexcept {
-        auto it = std::lower_bound(upper_bounds_.begin(), upper_bounds_.end(), value);
+        auto it  = std::lower_bound(upper_bounds_.begin(), upper_bounds_.end(), value);
         auto idx = static_cast<std::size_t>(it - upper_bounds_.begin());
         counts_[idx]++;
         sum_ += value;
@@ -144,7 +142,7 @@ public:
     }
 
 private:
-    const std::vector<int64_t>& upper_bounds_;  // borrows from histogram
+    const std::vector<int64_t>& upper_bounds_; // borrows from histogram
     std::vector<int64_t> counts_;
     int64_t sum_;
 };

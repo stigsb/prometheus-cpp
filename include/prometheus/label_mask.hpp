@@ -10,8 +10,7 @@ using LabelMask = typename LabelTraits::Mask;
 
 template <typename LabelTraits>
 consteval LabelMask<LabelTraits> make_mask(
-    std::same_as<typename LabelTraits::Key> auto... keys
-) noexcept {
+    std::same_as<typename LabelTraits::Key> auto... keys) noexcept {
     if constexpr (sizeof...(keys) == 0) {
         return LabelMask<LabelTraits>{0};
     } else {

@@ -3,26 +3,25 @@
 #include <string>
 
 PROMETHEUS_DEFINE_LABELS(RegLabels,
-    (service, std::string_view),
-    (method,  std::string_view),
-    (code,    uint32_t)
-);
+                         (service, std::string_view),
+                         (method, std::string_view),
+                         (code, uint32_t));
 
 TEST(RegistryTest, RegisterCounterGaugeHistogram) {
     prometheus::Registry reg;
 
     auto& counter = reg.counter<RegLabels>("reqs", "Total requests")
-        .required(RegLabels::Key::service, RegLabels::Key::method)
-        .build();
+                        .required(RegLabels::Key::service, RegLabels::Key::method)
+                        .build();
 
     auto& gauge = reg.gauge<RegLabels>("conns", "Active connections")
-        .required(RegLabels::Key::service)
-        .build();
+                      .required(RegLabels::Key::service)
+                      .build();
 
     auto& hist = reg.histogram<RegLabels>("latency", "Latency")
-        .required(RegLabels::Key::service, RegLabels::Key::method)
-        .buckets(100, 5)
-        .build();
+                     .required(RegLabels::Key::service, RegLabels::Key::method)
+                     .buckets(100, 5)
+                     .build();
 
     counter.get({.service = "api", .method = "GET"}).inc(100);
     gauge.get({.service = "api"}).set(42);
@@ -37,15 +36,16 @@ TEST(RegistryTest, RegisterCounterGaugeHistogram) {
 TEST(RegistryTest, EndToEnd) {
     prometheus::Registry reg;
 
-    auto& counter = reg.counter<RegLabels>("http_total", "HTTP requests")
-        .required(RegLabels::Key::service, RegLabels::Key::method, RegLabels::Key::code)
-        .const_label("env", "test")
-        .build();
+    auto& counter =
+        reg.counter<RegLabels>("http_total", "HTTP requests")
+            .required(RegLabels::Key::service, RegLabels::Key::method, RegLabels::Key::code)
+            .const_label("env", "test")
+            .build();
 
     // Simulate some traffic
-    counter.get({.service = "api", .method = "GET",  .code = 200u}).inc(1000);
+    counter.get({.service = "api", .method = "GET", .code = 200u}).inc(1000);
     counter.get({.service = "api", .method = "POST", .code = 201u}).inc(50);
-    counter.get({.service = "api", .method = "GET",  .code = 404u}).inc(3);
+    counter.get({.service = "api", .method = "GET", .code = 404u}).inc(3);
 
     auto out = reg.serialize();
 
@@ -60,9 +60,8 @@ TEST(RegistryTest, EndToEnd) {
 
 TEST(RegistryTest, SerializeToStream) {
     prometheus::Registry reg;
-    auto& fam = reg.counter<RegLabels>("count", "A counter")
-        .required(RegLabels::Key::service)
-        .build();
+    auto& fam =
+        reg.counter<RegLabels>("count", "A counter").required(RegLabels::Key::service).build();
     fam.get({.service = "svc"}).inc(7);
 
     std::ostringstream oss;
@@ -81,25 +80,17 @@ TEST(RegistryTest, EmptySerialize) {
 #ifndef NDEBUG
 TEST(RegistryTest, DuplicateNameAborts) {
     prometheus::Registry reg;
-    reg.counter<RegLabels>("dup_name", "first")
-        .required(RegLabels::Key::service)
-        .build();
+    reg.counter<RegLabels>("dup_name", "first").required(RegLabels::Key::service).build();
     EXPECT_DEATH(
-        reg.counter<RegLabels>("dup_name", "second")
-            .required(RegLabels::Key::service)
-            .build(),
+        reg.counter<RegLabels>("dup_name", "second").required(RegLabels::Key::service).build(),
         "duplicate metric family name");
 }
 
 TEST(RegistryTest, DifferentTypeConflictAborts) {
     prometheus::Registry reg;
-    reg.counter<RegLabels>("conflict_name", "as counter")
-        .required(RegLabels::Key::service)
-        .build();
+    reg.counter<RegLabels>("conflict_name", "as counter").required(RegLabels::Key::service).build();
     EXPECT_DEATH(
-        reg.gauge<RegLabels>("conflict_name", "as gauge")
-            .required(RegLabels::Key::service)
-            .build(),
+        reg.gauge<RegLabels>("conflict_name", "as gauge").required(RegLabels::Key::service).build(),
         "conflicting type");
 }
 #endif

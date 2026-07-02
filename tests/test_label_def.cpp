@@ -3,17 +3,16 @@
 #include <prometheus/label_mask.hpp>
 
 PROMETHEUS_DEFINE_LABELS(TestLabels,
-    (service,  std::string_view),
-    (method,   std::string_view),
-    (code,     uint32_t),
-    (region,   std::string_view)
-);
+                         (service, std::string_view),
+                         (method, std::string_view),
+                         (code, uint32_t),
+                         (region, std::string_view));
 
 TEST(LabelDefTest, KeyValuesArePowersOfTwo) {
     EXPECT_EQ(static_cast<uint64_t>(TestLabels::Key::service), 1ULL);
-    EXPECT_EQ(static_cast<uint64_t>(TestLabels::Key::method),  2ULL);
-    EXPECT_EQ(static_cast<uint64_t>(TestLabels::Key::code),    4ULL);
-    EXPECT_EQ(static_cast<uint64_t>(TestLabels::Key::region),  8ULL);
+    EXPECT_EQ(static_cast<uint64_t>(TestLabels::Key::method), 2ULL);
+    EXPECT_EQ(static_cast<uint64_t>(TestLabels::Key::code), 4ULL);
+    EXPECT_EQ(static_cast<uint64_t>(TestLabels::Key::region), 8ULL);
 }
 
 TEST(LabelDefTest, Count) {
@@ -22,9 +21,9 @@ TEST(LabelDefTest, Count) {
 
 TEST(LabelDefTest, KeyName) {
     EXPECT_EQ(TestLabels::key_name(TestLabels::Key::service), "service");
-    EXPECT_EQ(TestLabels::key_name(TestLabels::Key::method),  "method");
-    EXPECT_EQ(TestLabels::key_name(TestLabels::Key::code),    "code");
-    EXPECT_EQ(TestLabels::key_name(TestLabels::Key::region),  "region");
+    EXPECT_EQ(TestLabels::key_name(TestLabels::Key::method), "method");
+    EXPECT_EQ(TestLabels::key_name(TestLabels::Key::code), "code");
+    EXPECT_EQ(TestLabels::key_name(TestLabels::Key::region), "region");
 }
 
 TEST(LabelDefTest, KeyNameUnknown) {
@@ -36,7 +35,7 @@ TEST(LabelDefTest, KeyNameUnknown) {
 TEST(LabelDefTest, PopulatedMaskServiceMethod) {
     TestLabels::LabelSet ls{.service = "api", .method = "GET"};
     auto mask = TestLabels::populated_mask(ls);
-    EXPECT_EQ(mask, 1ULL | 2ULL);  // service | method
+    EXPECT_EQ(mask, 1ULL | 2ULL); // service | method
 }
 
 TEST(LabelDefTest, PopulatedMaskNone) {
@@ -77,7 +76,7 @@ TEST(LabelDefTest, FormatValueArithmetic) {
 TEST(LabelDefTest, FormatValueAbsent) {
     TestLabels::LabelSet ls{};
     EXPECT_EQ(TestLabels::format_value(TestLabels::Key::service, ls), "");
-    EXPECT_EQ(TestLabels::format_value(TestLabels::Key::code,    ls), "");
+    EXPECT_EQ(TestLabels::format_value(TestLabels::Key::code, ls), "");
 }
 
 TEST(LabelDefTest, FormatValueUnknownKey) {
@@ -96,8 +95,7 @@ TEST(LabelDefTest, AllKeys) {
 }
 
 TEST(LabelDefTest, MakeMask) {
-    auto mask = prometheus::make_mask<TestLabels>(
-        TestLabels::Key::service, TestLabels::Key::code);
+    auto mask = prometheus::make_mask<TestLabels>(TestLabels::Key::service, TestLabels::Key::code);
     EXPECT_EQ(mask, 1ULL | 4ULL);
 }
 
@@ -107,11 +105,10 @@ TEST(LabelDefTest, MakeMaskEmpty) {
 }
 
 TEST(LabelDefTest, MakeMaskAll) {
-    auto mask = prometheus::make_mask<TestLabels>(
-        TestLabels::Key::service,
-        TestLabels::Key::method,
-        TestLabels::Key::code,
-        TestLabels::Key::region);
+    auto mask = prometheus::make_mask<TestLabels>(TestLabels::Key::service,
+                                                  TestLabels::Key::method,
+                                                  TestLabels::Key::code,
+                                                  TestLabels::Key::region);
     EXPECT_EQ(mask, 1ULL | 2ULL | 4ULL | 8ULL);
 }
 
